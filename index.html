@@ -97,12 +97,17 @@
     .panel-size { grid-column:1 / -1; display:flex; align-items:center; gap:8px; width:100%; color:var(--sub); font-size:12px; }
     .panel-size select { width:auto; flex:1; margin:0; padding:8px 10px; font-size:12px; }
     @media(min-width:700px){ .panel[data-width="full"] { grid-column:1 / -1; } }
+    header { padding-right:30px; }
+    .delete-data { position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); right:calc(10px + env(safe-area-inset-right,0px)); z-index:10; display:grid; place-items:center; width:38px; height:38px; min-height:38px; padding:8px; border:1px solid var(--line); border-radius:10px; color:var(--sub); background:rgba(17,28,48,.95); }
+    .delete-data:hover, .delete-data:focus-visible { color:#ff8f9a; border-color:#ff8f9a; }
+    .delete-data svg { width:20px; height:20px; }
   </style>
   <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 </head>
 <body>
 <div id="checkFlash" aria-hidden="true"></div>
+<button id="deleteDataBtn" class="delete-data" aria-label="저장 데이터 삭제" title="저장 데이터 삭제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
 <main>
   <header>
     <div class="eyebrow">FOCUS ASSISTANT · CAMERA</div>
@@ -954,6 +959,24 @@
     $('nextCheck').textContent='—';currentPose=null;recentFrames=[];
     setState('측정 중지', '', '카메라가 종료되었습니다.');
   }
+  function deleteStoredData() {
+    if (!window.confirm('저장된 모든 설정, 정면 기준, 날짜별 점수 기록, 박스 순서와 크기를 삭제합니다. 삭제한 데이터는 복구할 수 없습니다. 삭제하시겠습니까?')) return;
+    try {
+      const storage=window.localStorage;
+      const keys=[];
+      for (let i=0;i<storage.length;i++) {
+        const key=storage.key(i);
+        if (key?.startsWith('focus-camera-test.')) keys.push(key);
+      }
+      keys.forEach(key=>storage.removeItem(key));
+    } catch(err) {
+      notify('저장 데이터 삭제에 실패했습니다. 브라우저의 웹사이트 데이터 설정을 확인해 주세요.');
+      return;
+    }
+    stop();
+    window.location.reload();
+  }
+  $('deleteDataBtn').addEventListener('click',deleteStoredData);
   startBtn.addEventListener('click',()=>start());
   stopBtn.addEventListener('click',()=>{ stop();notify('측정을 중지하고 카메라를 종료했습니다.'); });
   calibrateBtn.addEventListener('click',()=>{
