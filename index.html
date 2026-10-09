@@ -14,7 +14,7 @@
     .eyebrow { font-size:12px; letter-spacing:2px; color:var(--mint); font-weight:800; }
     h1 { margin:6px 0 8px; font-size:clamp(25px,5vw,39px); letter-spacing:-1.2px; }
     .lead { margin:0; color:var(--sub); line-height:1.7; font-size:14px; }
-    .layout { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(270px,.8fr); gap:16px; }
+    .layout { display:flex; flex-direction:column; gap:16px; }
     .camera-column { min-width:0; }
     .panel { background:rgba(17,28,48,.95); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
     .cam { aspect-ratio:4/5; max-height:540px; background:#070c17; position:relative; overflow:hidden; }
@@ -61,7 +61,7 @@
     .meter { height:8px; background:#2b3a50; border-radius:50px; overflow:hidden; margin-top:7px; }
     .meter > div { width:0; background:linear-gradient(90deg,#3ac7e2,#56e1ae); height:100%; transition:width .3s; }
     .message { background:#0c1525; border:1px solid #34445d; padding:12px; border-radius:12px; color:#b9cde0; font-size:13px; min-height:48px; line-height:1.6; }
-    .section { margin-top:16px; padding:18px; }
+    .section { padding:18px; }
     .chart-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
     .chart-header h2 { margin:0; }
     .chart-total { color:var(--mint); font-size:14px; font-weight:800; }
@@ -77,6 +77,14 @@
     input[type="range"] { width:100%; margin-top:12px; accent-color:var(--mint); }
     @media(max-width:700px){ .layout{grid-template-columns:1fr;} .cam{max-height:none;aspect-ratio:4/4.3;} .controls{padding:16px;} }
     #checkFlash { position:fixed; inset:0; z-index:9999; background:#fff; opacity:0; pointer-events:none; }
+    .panel { min-width:0; }
+    .panel-move { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 18px; border-bottom:1px solid var(--line); }
+    .panel-move strong { font-size:14px; }
+    .panel-move .btns { flex-wrap:nowrap; }
+    .panel-move button { padding:7px 12px; min-height:38px; }
+    .controls > .panel-move, .section > .panel-move { margin:-18px -18px 0; }
+    .section > .panel-move { margin-bottom:12px; }
+    @media(max-width:700px){ .controls > .panel-move { margin:-16px -16px 0; } }
   </style>
   <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -90,9 +98,9 @@
     <p class="lead">아이폰 전면 카메라로 얼굴 방향을 확인하는 정면 감지 도구입니다.<br>마음에 드는 소리를 골라 정면 감지 때의 느낌을 비교해 보세요.</p>
   </header>
 
-  <div class="layout">
-    <div class="camera-column">
-    <section class="panel" aria-label="전면 카메라">
+  <div class="layout" id="panelLayout">
+    <section class="panel" data-panel="camera" aria-label="전면 카메라">
+      <div class="panel-move"><strong>전면 카메라</strong><div class="btns"><button class="secondary" data-move="up" aria-label="전면 카메라 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="전면 카메라 아래로 이동">↓ 아래로</button></div></div>
       <div class="cam">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="personOverlay" hidden aria-hidden="true"></canvas>
@@ -117,7 +125,8 @@
       </div>
     </section>
 
-  <section class="panel section" aria-label="최근 2시간의 점수">
+  <section class="panel section" data-panel="recent" aria-label="최근 2시간의 점수">
+      <div class="panel-move"><strong>최근 2시간 차트</strong><div class="btns"><button class="secondary" data-move="up" aria-label="최근 2시간 차트 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="최근 2시간 차트 아래로 이동">↓ 아래로</button></div></div>
     <div class="chart-header">
       <h2>최근 2시간 · 15분별 점수</h2>
       <div class="chart-total" id="recentTotal">구간 합계 0점</div>
@@ -128,7 +137,8 @@
     <p class="hint" id="recentHistoryNote"></p>
   </section>
 
-  <section class="panel section" aria-label="오늘의 시간대별 점수">
+  <section class="panel section" data-panel="daily" aria-label="오늘의 시간대별 점수">
+      <div class="panel-move"><strong>24시간 차트</strong><div class="btns"><button class="secondary" data-move="up" aria-label="24시간 차트 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="24시간 차트 아래로 이동">↓ 아래로</button></div></div>
     <div class="chart-header">
       <h2>오늘의 시간대별 누적 점수</h2>
       <div class="chart-total" id="dailyTotal">오늘 합계 0점</div>
@@ -141,9 +151,8 @@
     <p class="hint" id="chartStorageStatus" role="status"></p>
   </section>
 
-    </div>
-
-    <section class="panel controls" aria-label="설정">
+    <section class="panel controls" data-panel="cameraControls" aria-label="카메라 제어">
+      <div class="panel-move"><strong>카메라 제어</strong><div class="btns"><button class="secondary" data-move="up" aria-label="카메라 제어 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="카메라 제어 아래로 이동">↓ 아래로</button></div></div>
       <div>
         <h2>카메라 제어</h2>
         <div class="btns">
@@ -158,7 +167,20 @@
       <p class="hint">작업할 때의 자세마다 ‘정면 기준 추가’를 눌러 주세요. 등록한 기준 중 하나와 일치하면 정면으로 판정합니다. 기준은 이 기기·브라우저에 저장하여 새로고침하거나 다시 접속해도 재사용합니다. ‘기준 초기화’를 누르면 저장된 기준도 삭제합니다. 카메라 위치를 바꾸면 초기화 후 다시 등록하세요.</p>
       <p class="hint" id="settingsSummary" role="status">소리·음량·확인 간격·배경 흐림·화면 번쩍임은 이 브라우저에 자동 저장됩니다.</p>
       <div>
-        <h2>어떤 소리가 기분 좋은가요?</h2>
+        <label class="label" for="interval">정면 확인 간격</label>
+        <select id="interval">
+          <option value="2000">2초마다</option>
+          <option value="3000" selected>3초마다</option>
+          <option value="5000">5초마다</option>
+          <option value="10000">10초마다</option>
+        </select>
+        <p class="hint">확인 순간 직전 약 1초간 정면 상태가 안정적으로 유지되어야 소리가 납니다. 고개를 돌리거나 얼굴이 사라지면 울리지 않습니다.</p>
+      </div>
+    </section>
+    <section class="panel controls" data-panel="sound" aria-label="소리">
+      <div class="panel-move"><strong>소리</strong><div class="btns"><button class="secondary" data-move="up" aria-label="소리 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="소리 아래로 이동">↓ 아래로</button></div></div>
+      <div>
+        <h2>소리</h2>
         <label class="label" for="soundPreset">정면 감지 사운드</label>
         <select id="soundPreset">
           <option value="silent">무음 · 소리 없이 점수 누적</option>
@@ -186,18 +208,11 @@
           <button id="soundStopBtn" class="secondary">소리 멈추기</button>
         </div>
       </div>
+    </section>
+    <section class="panel controls" data-panel="stats" aria-label="실시간 누적 통계">
+      <div class="panel-move"><strong>실시간 누적 통계</strong><div class="btns"><button class="secondary" data-move="up" aria-label="실시간 누적 통계 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="실시간 누적 통계 아래로 이동">↓ 아래로</button></div></div>
       <div>
-        <label class="label" for="interval">정면 확인 간격</label>
-        <select id="interval">
-          <option value="2000">2초마다</option>
-          <option value="3000" selected>3초마다</option>
-          <option value="5000">5초마다</option>
-          <option value="10000">10초마다</option>
-        </select>
-        <p class="hint">확인 순간 직전 약 1초간 정면 상태가 안정적으로 유지되어야 소리가 납니다. 고개를 돌리거나 얼굴이 사라지면 울리지 않습니다.</p>
-      </div>
-      <div>
-        <div class="label">실시간 누적 통계</div>
+        <h2>실시간 누적 통계</h2>
         <div class="metrics" style="margin-top:9px">
           <div class="metric"><span>측정 경과</span><strong id="elapsed">00:00</strong></div>
           <div class="metric"><span>사운드 알림 횟수</span><strong id="bells">0</strong></div>
@@ -434,7 +449,7 @@
     const labelStep=width<480 ? 3 : (width<720 ? 2 : 1);
     const barWidth=Math.max(2,slot*.68);
     const maximum=Math.max(4,Math.ceil(Math.max(...hours)/4)*4);
-    let svg='';
+    let svg=`<text x="${left}" y="14" fill="#a3b1c9" font-size="11">초</text><text x="${width-right}" y="225" text-anchor="end" fill="#a3b1c9" font-size="11">시간</text>`;
     for (let tick=0;tick<=4;tick++) {
       const value=maximum*tick/4, y=bottom-plotHeight*tick/4;
       svg+=`<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}" stroke="#27354c"/><text x="${left-8}" y="${y+4}" text-anchor="end" fill="#a3b1c9" font-size="11">${value}</text>`;
@@ -447,7 +462,7 @@
       svg+='</g>';
     });
     $('hourlyChart').innerHTML=svg;
-    $('hourlyChart').setAttribute('aria-label',`오늘 시간대별 누적 점수. 합계 ${total}점. `+hours.map((value,hour)=>`${hour}시 ${value}점`).join(', '));
+    $('hourlyChart').setAttribute('aria-label',`오늘 시간대별 누적 점수. 가로축 시간, 세로축 초. 합계 ${total}점. `+hours.map((value,hour)=>`${hour}시 ${value}점`).join(', '));
   }
 
   function renderRecentChart(now=new Date()) {
@@ -465,7 +480,7 @@
     $('recentChart').setAttribute('viewBox',`0 0 ${width} 230`);
     const left=42,right=10,top=28,bottom=188,height=bottom-top,slot=(width-left-right)/8;
     const maximum=Math.max(4,Math.ceil(Math.max(...values)/4)*4);
-    let svg='';
+    let svg=`<text x="${left}" y="14" fill="#a3b1c9" font-size="11">초</text><text x="${width-right}" y="225" text-anchor="end" fill="#a3b1c9" font-size="11">시간</text>`;
     for(let tick=0;tick<=4;tick++) {
       const value=maximum*tick/4,y=bottom-height*tick/4;
       svg+=`<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}" stroke="#27354c"/><text x="${left-8}" y="${y+4}" text-anchor="end" fill="#a3b1c9" font-size="10">${value}</text>`;
@@ -478,7 +493,7 @@
       svg+='</g>';
     });
     $('recentChart').innerHTML=svg;
-    $('recentChart').setAttribute('aria-label','최근 2시간 15분별 점수. '+values.map((value,i)=>`${labels[i]} ${value}점`).join(', '));
+    $('recentChart').setAttribute('aria-label','최근 2시간 15분별 점수. 가로축 시간, 세로축 초. '+values.map((value,i)=>`${labels[i]} ${value}점`).join(', '));
   }
 
   function recordHourlyPoint(points) {
@@ -904,6 +919,47 @@
     }
   });
   window.addEventListener('pagehide',()=>{if(running)stop();});
+  const panelOrderStorageKey='focus-camera-test.panel-order.v1';
+  const panelLayout=$('panelLayout');
+  const panels=Array.from(panelLayout.children);
+  function updatePanelMoveButtons() {
+    const ordered=Array.from(panelLayout.children);
+    ordered.forEach((panel,index)=>{
+      panel.querySelector('[data-move="up"]').disabled=index===0;
+      panel.querySelector('[data-move="down"]').disabled=index===ordered.length-1;
+    });
+  }
+  function restorePanelOrder() {
+    try {
+      const saved=JSON.parse(window.localStorage.getItem(panelOrderStorageKey));
+      if (Array.isArray(saved)) {
+        const seen=new Set();
+        saved.forEach(id=>{
+          const panel=panels.find(item=>item.dataset.panel===id);
+          if (panel && !seen.has(id)) {panelLayout.appendChild(panel);seen.add(id);}
+        });
+        panels.filter(panel=>!seen.has(panel.dataset.panel)).forEach(panel=>panelLayout.appendChild(panel));
+      }
+    } catch(err) { /* Keep default order when storage is unavailable or invalid. */ }
+    updatePanelMoveButtons();
+  }
+  panels.forEach(panel=>panel.querySelectorAll('[data-move]').forEach(button=>button.addEventListener('click',()=>{
+    const direction=button.dataset.move;
+    const neighbor=direction==='up' ? panel.previousElementSibling : panel.nextElementSibling;
+    if (!neighbor) return;
+    if (direction==='up') panelLayout.insertBefore(panel,neighbor);
+    else panelLayout.insertBefore(neighbor,panel);
+    updatePanelMoveButtons();
+    // Keep keyboard focus on the moved card even when its direction becomes disabled.
+    const focusButton=button.disabled ? panel.querySelector(direction==='up' ? '[data-move="down"]' : '[data-move="up"]') : button;
+    focusButton.focus({preventScroll:true});
+    panel.scrollIntoView({block:'nearest'});
+    try {
+      window.localStorage.setItem(panelOrderStorageKey,JSON.stringify(Array.from(panelLayout.children,p=>p.dataset.panel)));
+      notify('박스 순서를 저장했습니다. 다음 접속에도 적용됩니다.');
+    } catch(err) {notify('박스 순서 저장에 실패했습니다. 이번 접속에서만 적용됩니다.');}
+  })));
+  restorePanelOrder();
   restoreCalibrations();
   updateCalibrationSummary();
   restoreSettings();
