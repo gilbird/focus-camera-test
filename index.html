@@ -17,7 +17,7 @@
     .layout { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:16px; width:100%; margin-inline:auto; }
     .camera-column { min-width:0; }
     .panel { background:rgba(17,28,48,.95); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
-    .cam { aspect-ratio:4/5; max-height:540px; background:#070c17; position:relative; overflow:hidden; }
+    .cam { touch-action:manipulation; aspect-ratio:4/5; max-height:540px; background:#070c17; position:relative; overflow:hidden; }
     video,canvas { position:absolute; width:100%; height:100%; inset:0; object-fit:cover; transform:scaleX(-1); }
     video { background:#090f1e; }
     canvas { pointer-events:none; }
@@ -119,7 +119,7 @@
   <div class="layout" id="panelLayout">
     <section class="panel" data-panel="camera" aria-label="전면 카메라">
       <div class="panel-move"><strong>전면 카메라</strong><div class="btns"><button class="secondary" data-move="up" aria-label="전면 카메라 위로 이동" title="전면 카메라 위로 이동">↑</button><button class="secondary" data-move="down" aria-label="전면 카메라 아래로 이동" title="전면 카메라 아래로 이동">↓</button><button class="secondary" data-move="left" aria-label="전면 카메라 왼쪽으로 이동" title="전면 카메라 왼쪽으로 이동">←</button><button class="secondary" data-move="right" aria-label="전면 카메라 오른쪽으로 이동" title="전면 카메라 오른쪽으로 이동">→</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="전면 카메라 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
-      <div class="cam">
+      <div class="cam" id="cameraSurface">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="personOverlay" hidden aria-hidden="true"></canvas>
         <canvas id="overlay" aria-hidden="true"></canvas>
@@ -1003,7 +1003,7 @@
   $('cameraToggleBtn').addEventListener('click',()=>{if (starting) return;if (running) {stop();notify('카메라를 껐습니다.');}else start();});
   startBtn.addEventListener('click',()=>start());
   stopBtn.addEventListener('click',()=>{ stop();notify('측정을 중지하고 카메라를 종료했습니다.'); });
-  calibrateBtn.addEventListener('click',()=>{
+  function addFrontReference() {
     if (!running || !currentPose) {notify('먼저 카메라에 얼굴이 보이도록 해 주세요.');return;}
     baselines.push({yaw:currentPose.yaw,roll:currentPose.roll,pitch:currentPose.pitch});
     recentFrames=[];
@@ -1012,6 +1012,36 @@
     updateCalibrationSummary();
     notify(`◎ 정면 기준 ${baselines.length}을 추가했습니다. 기존 기준도 유지됩니다. ` +
       (saved ? '다음 접속에서도 재사용합니다.' : '브라우저 저장에 실패하여 이번 접속에서만 사용합니다.'));
+  }
+  calibrateBtn.addEventListener('click',addFrontReference);
+  const cameraSurface=$('cameraSurface');
+  const isCameraBlankTarget=target=>!target.closest('button, input, select, a, [role="button"]');
+  let pointerTapStart=null,lastCameraTap=null,lastTouchCalibrationAt=-Infinity;
+  cameraSurface.addEventListener('dblclick',event=>{
+    if (!isCameraBlankTarget(event.target)) return;
+    event.preventDefault();
+    if (performance.now()-lastTouchCalibrationAt<700) return;
+    addFrontReference();
+  });
+  cameraSurface.addEventListener('pointerdown',event=>{
+    if (event.pointerType==='mouse') return;
+    if (!event.isPrimary || !isCameraBlankTarget(event.target)) {pointerTapStart=null;lastCameraTap=null;return;}
+    pointerTapStart={id:event.pointerId,x:event.clientX,y:event.clientY,t:performance.now()};
+  });
+  cameraSurface.addEventListener('pointercancel',()=>{pointerTapStart=null;lastCameraTap=null;});
+  cameraSurface.addEventListener('pointerup',event=>{
+    if (event.pointerType==='mouse') return;
+    const start=pointerTapStart;
+    pointerTapStart=null;
+    const now=performance.now();
+    if (!start || start.id!==event.pointerId || !event.isPrimary || !isCameraBlankTarget(event.target) ||
+        now-start.t>450 || Math.hypot(event.clientX-start.x,event.clientY-start.y)>20) {lastCameraTap=null;return;}
+    if (lastCameraTap && now-lastCameraTap.t<=350 && Math.hypot(event.clientX-lastCameraTap.x,event.clientY-lastCameraTap.y)<=24) {
+      lastCameraTap=null;
+      lastTouchCalibrationAt=now;
+      event.preventDefault();
+      addFrontReference();
+    } else {lastCameraTap={x:event.clientX,y:event.clientY,t:now};}
   });
   $('resetCalibrationBtn').addEventListener('click',()=>{
     baselines=[];
