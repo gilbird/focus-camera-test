@@ -30,7 +30,7 @@
     .face-icon { width:80px; height:80px; border:2px dashed #6a859d; border-radius:38%; margin:0 auto 16px; display:grid; place-items:center; font-size:33px; }
     .placeholder strong { font-size:19px; }
     .placeholder p { font-size:13px; line-height:1.6; color:var(--sub); }
-    .live-pill { position:absolute; top:13px; left:13px; z-index:3; font-size:12px; font-weight:800; padding:8px 11px; border-radius:999px; background:rgba(7,12,23,.80); border:1px solid #45536b; }
+    .live-pill { position:absolute; top:59px; left:13px; z-index:3; font-size:12px; font-weight:800; padding:8px 11px; border-radius:999px; background:rgba(7,12,23,.80); border:1px solid #45536b; }
     .live-pill::before { content:""; width:8px; height:8px; border-radius:50%; display:inline-block; background:#72819a; margin-right:7px; }
     .live-pill.on::before { background:var(--mint); box-shadow:0 0 0 3px #56e1ae25; }
     .camera-counts { position:absolute; top:13px; right:13px; z-index:3; display:flex; gap:6px; pointer-events:none; }
@@ -101,6 +101,7 @@
     .delete-data { position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); right:calc(10px + env(safe-area-inset-right,0px)); z-index:10; display:grid; place-items:center; width:38px; height:38px; min-height:38px; padding:8px; border:1px solid var(--line); border-radius:10px; color:var(--sub); background:rgba(17,28,48,.95); }
     .delete-data:hover, .delete-data:focus-visible { color:#ff8f9a; border-color:#ff8f9a; }
     .delete-data svg { width:20px; height:20px; }
+    .cam button.camera-toggle { position:absolute; top:13px; left:13px; z-index:3; padding:8px 11px; min-height:36px; font-size:12px; background:#263751; color:var(--txt); }
   </style>
   <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -125,10 +126,11 @@
         <div class="placeholder" id="placeholder">
           <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>페이지를 열면 자동으로 카메라를 시작합니다.<br>셀카 카메라 사용을 허용하세요.</p></div>
         </div>
+        <button id="cameraToggleBtn" class="camera-toggle" aria-label="카메라 켜기" aria-pressed="false">▶ 카메라 켜기</button>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
         <div class="camera-counts"><div class="score-pill" aria-label="몰입수">몰입수<strong id="focusCount">0</strong></div><div class="score-pill" aria-label="전체 체크수">체크수<strong id="checkCount">0</strong></div></div>
         <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
-        <button id="audioEnableBtn" class="audio-enable">♪ 소리 켜기</button>
+        <button id="audioEnableBtn" class="audio-enable" aria-label="소리 켜기" aria-pressed="false">♪ 소리 켜기</button>
       </div>
       <div class="camera-bottom">
         <div class="status">
@@ -307,6 +309,7 @@
   const settingsStorageKey = 'focus-camera-test.settings.v1';
   let calibrationStorageStatus = '';
   let recentFrames = [];
+  let soundEnabled = true;
   let audioCtx = null;
   let audioBus = null;
   const activeSounds = new Set();
@@ -409,6 +412,7 @@
         $('soundVolume').value = String(saved.soundVolume);
       }
       if ([2000,3000,5000,10000].includes(saved.interval)) intervalSelect.value = String(saved.interval);
+      if (typeof saved.soundEnabled==='boolean') soundEnabled=saved.soundEnabled;
       if (['descend','double','low','silent'].includes(saved.failureSoundPreset)) $('failureSoundPreset').value=saved.failureSoundPreset;
       if (typeof saved.backgroundBlur==='boolean') $('backgroundBlur').checked=saved.backgroundBlur;
       if (typeof saved.flashOnCheck==='boolean') $('flashOnCheck').checked=saved.flashOnCheck;
@@ -421,7 +425,7 @@
   function persistSettings() {
     try {
       window.localStorage.setItem(settingsStorageKey, JSON.stringify({version:1,
-        soundPreset:$('soundPreset').value, failureSoundPreset:$('failureSoundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value),
+        soundEnabled, soundPreset:$('soundPreset').value, failureSoundPreset:$('failureSoundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value),
         backgroundBlur:$('backgroundBlur').checked, flashOnCheck:$('flashOnCheck').checked}));
       $('settingsSummary').textContent = '성공·실패 소리·음량·확인 간격·배경 흐림·화면 번쩍임을 저장했습니다. 다음 접속에도 적용됩니다.';
     } catch (err) {
@@ -680,14 +684,19 @@
       audioBus = audioCtx.createGain();
       audioBus.connect(audioCtx.destination);
     }
-    audioBus.gain.value = Number($('soundVolume').value) / 100;
+    audioBus.gain.value = soundEnabled ? Number($('soundVolume').value) / 100 : 0;
     return audioCtx;
   }
   function hasAudibleSelection() {
-    return Number($('soundVolume').value)>0 && ($('soundPreset').value!=='silent' || $('failureSoundPreset').value!=='silent');
+    return soundEnabled && Number($('soundVolume').value)>0 && ($('soundPreset').value!=='silent' || $('failureSoundPreset').value!=='silent');
   }
   function updateAudioStatus() {
-    $('audioEnableBtn').hidden=!hasAudibleSelection() || audioCtx?.state==='running';
+    const active=soundEnabled && audioCtx?.state==='running';
+    const button=$('audioEnableBtn');
+    button.hidden=false;
+    button.textContent=active ? '♪ 소리 끄기' : '♪ 소리 켜기';
+    button.setAttribute('aria-label',active ? '소리 끄기' : '소리 켜기');
+    button.setAttribute('aria-pressed',String(active));
   }
   async function unlockAudio() {
     prepareAudio();
@@ -770,6 +779,7 @@
     return $('soundPreset').selectedOptions[0].textContent.split(' · ')[0];
   }
   function playSelectedSound() {
+    if (!soundEnabled) {stopSounds();return false;}
     if ($('soundPreset').value==='silent') { stopSounds(); return false; }
     if (!audioCtx || audioCtx.state!=='running' || !audioBus) return false;
     stopSounds();
@@ -786,6 +796,7 @@
     return true;
   }
   function playFailureSound() {
+    if (!soundEnabled) {stopSounds();return false;}
     const preset=$('failureSoundPreset').value;
     if (preset==='silent') {stopSounds();return false;}
     if (!audioCtx || audioCtx.state!=='running' || !audioBus || Number($('soundVolume').value)===0) return false;
@@ -797,6 +808,7 @@
     return true;
   }
   async function previewFailureSound() {
+    if (!soundEnabled) {notify('소리가 꺼져 있습니다. 카메라 화면의 ‘소리 켜기’를 눌러 주세요.');return;}
     if ($('failureSoundPreset').value==='silent') {stopSounds();notify('실패 알림음은 무음입니다.');return;}
     try {
       await unlockAudio();
@@ -811,6 +823,7 @@
     updateAudioStatus();
   }
   async function previewSound() {
+    if (!soundEnabled) {notify('소리가 꺼져 있습니다. 카메라 화면의 ‘소리 켜기’를 눌러 주세요.');return;}
     if ($('soundPreset').value==='silent') {
       stopSounds();
       notify('성공 알림음은 무음입니다. 몰입 판정과 점수는 계속 누적되며, 실패 알림음은 별도 설정을 따릅니다.');
@@ -860,7 +873,7 @@
         notify(`정면 확인 +${intervalSeconds}점! ${selectedSoundLabel()} 소리를 재생했습니다.`);
       } else {
         updateAudioStatus();
-        notify($('soundPreset').value==='silent' || Number($('soundVolume').value)===0 ? `정면 확인 +${intervalSeconds}점 · 소리 없이 점수를 누적합니다.` :
+        notify(!soundEnabled || $('soundPreset').value==='silent' || Number($('soundVolume').value)===0 ? `정면 확인 +${intervalSeconds}점 · 소리 없이 점수를 누적합니다.` :
           `정면 확인 +${intervalSeconds}점 · 소리를 켜려면 카메라 화면의 ‘소리 켜기’를 눌러 주세요.`);
       }
     } else {
@@ -869,7 +882,7 @@
       if (played) {bellCount+=1;$('bells').textContent=String(bellCount);}
       else updateAudioStatus();
       const feedback=played ? '실패 알림음을 재생했습니다.' :
-        ($('failureSoundPreset').value==='silent' || Number($('soundVolume').value)===0 ? '실패 알림음은 무음입니다.' : '소리를 켜려면 ‘소리 켜기’를 눌러 주세요.');
+        (!soundEnabled || $('failureSoundPreset').value==='silent' || Number($('soundVolume').value)===0 ? '실패 알림음은 무음입니다.' : '소리를 켜려면 ‘소리 켜기’를 눌러 주세요.');
       notify('확인 간격 동안 정면 유지가 확인되지 않아 몰입수와 점수를 추가하지 않았습니다. '+feedback);
     }
   }
@@ -901,9 +914,17 @@
     }
     if (running && myRun===runId) frameRequest=requestAnimationFrame(()=>detectLoop(myRun));
   }
+  function updateCameraToggle() {
+    const button=$('cameraToggleBtn');
+    button.disabled=starting;
+    button.textContent=starting ? '카메라 준비 중…' : (running ? '■ 카메라 끄기' : '▶ 카메라 켜기');
+    button.setAttribute('aria-label',starting ? '카메라 준비 중' : (running ? '카메라 끄기' : '카메라 켜기'));
+    button.setAttribute('aria-pressed',String(running));
+  }
   async function start({automatic=false}={}) {
     if (running || starting) return;
     starting=true;
+    updateCameraToggle();
     startBtn.disabled=true;
     notify('카메라 권한과 얼굴 분석 모델을 준비하고 있습니다…');
     try {
@@ -941,6 +962,7 @@
       stop();
     } finally {
       starting=false;
+      updateCameraToggle();
     }
   }
   function stop() {
@@ -958,6 +980,7 @@
     startBtn.disabled=false;stopBtn.disabled=true;calibrateBtn.disabled=true;
     $('nextCheck').textContent='—';currentPose=null;recentFrames=[];
     setState('측정 중지', '', '카메라가 종료되었습니다.');
+    updateCameraToggle();
   }
   function deleteStoredData() {
     if (!window.confirm('저장된 모든 설정, 정면 기준, 날짜별 점수 기록, 박스 순서와 크기를 삭제합니다. 삭제한 데이터는 복구할 수 없습니다. 삭제하시겠습니까?')) return;
@@ -977,6 +1000,7 @@
     window.location.reload();
   }
   $('deleteDataBtn').addEventListener('click',deleteStoredData);
+  $('cameraToggleBtn').addEventListener('click',()=>{if (starting) return;if (running) {stop();notify('카메라를 껐습니다.');}else start();});
   startBtn.addEventListener('click',()=>start());
   stopBtn.addEventListener('click',()=>{ stop();notify('측정을 중지하고 카메라를 종료했습니다.'); });
   calibrateBtn.addEventListener('click',()=>{
@@ -999,7 +1023,25 @@
       '이번 접속의 기준은 초기화했지만 저장된 기준 삭제에 실패했습니다. 다음 접속에서 이전 기준이 복원될 수 있습니다.');
   });
   $('soundBtn').addEventListener('click',previewSound);
-  $('audioEnableBtn').addEventListener('click',()=>$('soundPreset').value==='silent' ? previewFailureSound() : previewSound());
+  async function toggleCameraSound() {
+    if (soundEnabled && audioCtx?.state==='running') {
+      soundEnabled=false;
+      stopSounds();
+      if (audioBus) audioBus.gain.value=0;
+      persistSettings();updateAudioStatus();
+      notify('소리를 껐습니다. 몰입 판정과 점수 기록은 계속됩니다.');
+      return;
+    }
+    soundEnabled=true;
+    persistSettings();updateAudioStatus();
+    try {
+      await unlockAudio();
+      if (!soundEnabled) return;
+      const played=$('soundPreset').value==='silent' ? playFailureSound() : playSelectedSound();
+      notify(played ? '소리를 켰습니다.' : '소리를 켰습니다. 무음 선택 또는 음량 0%에서는 소리가 나지 않습니다.');
+    } catch(err) {updateAudioStatus();notify(`소리 활성화 실패: ${err.message}`);}
+  }
+  $('audioEnableBtn').addEventListener('click',toggleCameraSound);
   $('failureSoundBtn').addEventListener('click',previewFailureSound);
   $('failureSoundPreset').addEventListener('change',()=>{stopSounds();persistSettings();updateAudioStatus();previewFailureSound();});
   $('soundStopBtn').addEventListener('click',()=>{stopSounds();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
@@ -1013,7 +1055,7 @@
   $('soundVolume').addEventListener('input',()=>{
     $('volumeLabel').textContent=`${$('soundVolume').value}%`;
     persistSettings();
-    if (audioBus) audioBus.gain.setTargetAtTime(Number($('soundVolume').value)/100,audioCtx.currentTime,.02);
+    if (audioBus) audioBus.gain.setTargetAtTime(soundEnabled ? Number($('soundVolume').value)/100 : 0,audioCtx.currentTime,.02);
     updateAudioStatus();
   });
   intervalSelect.addEventListener('change',()=>{persistSettings();restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
