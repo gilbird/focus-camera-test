@@ -28,6 +28,8 @@
     .live-pill { position:absolute; top:13px; left:13px; z-index:3; font-size:12px; font-weight:800; padding:8px 11px; border-radius:999px; background:rgba(7,12,23,.80); border:1px solid #45536b; }
     .live-pill::before { content:""; width:8px; height:8px; border-radius:50%; display:inline-block; background:#72819a; margin-right:7px; }
     .live-pill.on::before { background:var(--mint); box-shadow:0 0 0 3px #56e1ae25; }
+    .score-pill { position:absolute; top:13px; right:13px; z-index:3; padding:8px 12px; border-radius:14px; background:rgba(7,12,23,.85); border:1px solid var(--mint); color:var(--mint); font-size:12px; font-weight:800; text-align:center; pointer-events:none; }
+    .score-pill strong { display:block; font-size:26px; line-height:1.2; font-variant-numeric:tabular-nums; }
     .camera-bottom { padding:17px 18px 20px; }
     .status { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .status strong { font-size:20px; }
@@ -83,6 +85,7 @@
           <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>시작 버튼을 누르고<br>셀카 카메라 사용을 허용하세요.</p></div>
         </div>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
+        <div class="score-pill" aria-label="정면 감지 점수">점수<strong id="score">0</strong></div>
         <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
       </div>
       <div class="camera-bottom">
@@ -196,6 +199,7 @@
   let startedAt = 0;
   let nextCheckAt = 0;
   let bellCount = 0;
+  let pageScore = 0;
   let observed = 0;
   let frontObserved = 0;
   let currentPose = null;
@@ -482,6 +486,8 @@
       if (playSelectedSound()) {
         bellCount+=1;
         $('bells').textContent=String(bellCount);
+        pageScore+=1;
+        $('score').textContent=String(pageScore);
         notify(`정면 상태 확인! ${selectedSoundLabel()} 소리를 재생했습니다.`);
       } else {
         notify('정면이 감지되었지만 소리를 재생하지 못했습니다. 소리 크기를 확인하고 ‘선택한 소리 다시 듣기’를 눌러 주세요.');
