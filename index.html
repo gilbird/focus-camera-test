@@ -15,6 +15,7 @@
     h1 { margin:6px 0 8px; font-size:clamp(25px,5vw,39px); letter-spacing:-1.2px; }
     .lead { margin:0; color:var(--sub); line-height:1.7; font-size:14px; }
     .layout { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(270px,.8fr); gap:16px; }
+    .camera-column { min-width:0; }
     .panel { background:rgba(17,28,48,.95); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
     .cam { aspect-ratio:4/5; max-height:540px; background:#070c17; position:relative; overflow:hidden; }
     video,canvas { position:absolute; width:100%; height:100%; inset:0; object-fit:cover; transform:scaleX(-1); }
@@ -55,6 +56,11 @@
     .meter > div { width:0; background:linear-gradient(90deg,#3ac7e2,#56e1ae); height:100%; transition:width .3s; }
     .message { background:#0c1525; border:1px solid #34445d; padding:12px; border-radius:12px; color:#b9cde0; font-size:13px; min-height:48px; line-height:1.6; }
     .section { margin-top:16px; padding:18px; }
+    .chart-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .chart-header h2 { margin:0; }
+    .chart-total { color:var(--mint); font-size:14px; font-weight:800; }
+    .chart-scroll { overflow-x:auto; margin-top:14px; }
+    #hourlyChart { display:block; width:100%; min-width:720px; height:auto; }
     h2 { font-size:16px; margin:0 0 10px; }
     ol { margin:0; padding-left:23px; color:#c4d0df; font-size:13px; line-height:1.9; }
     .note { color:var(--sub); font-size:12px; line-height:1.7; margin-top:12px; }
@@ -77,6 +83,7 @@
   </header>
 
   <div class="layout">
+    <div class="camera-column">
     <section class="panel" aria-label="전면 카메라">
       <div class="cam">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
@@ -97,6 +104,21 @@
       </div>
     </section>
 
+  <section class="panel section" aria-label="오늘의 시간대별 점수">
+    <div class="chart-header">
+      <h2>오늘의 시간대별 누적 점수</h2>
+      <div class="chart-total" id="dailyTotal">오늘 합계 0점</div>
+    </div>
+    <p class="hint" id="chartDate"></p>
+    <div class="chart-scroll">
+      <svg id="hourlyChart" viewBox="0 0 820 230" role="img" aria-label="오늘 0시부터 23시까지 시간대별 누적 점수 막대 차트"></svg>
+    </div>
+    <p class="hint">각 막대는 해당 시간에 얻은 점수의 합계입니다. 화면 점수가 초기화되어도 오늘 기록은 유지됩니다. 시간대는 기기의 현지 시간을 기준으로 합니다.</p>
+    <p class="hint" id="chartStorageStatus" role="status"></p>
+  </section>
+
+    </div>
+
     <section class="panel controls" aria-label="테스트 설정">
       <div>
         <h2>테스트 제어</h2>
@@ -115,7 +137,8 @@
         <h2>어떤 소리가 기분 좋은가요?</h2>
         <label class="label" for="soundPreset">정면 감지 사운드</label>
         <select id="soundPreset">
-          <option value="tick">시계 초침 · 짧고 가벼운 틱</option>
+          <option value="silent">무음 · 소리와 점수 증가 없이 감지</option>
+          <option value="tick" selected>시계 초침 · 짧고 가벼운 틱</option>
           <option value="rain">빗소리 · 가볍게 쏟아지는 비</option>
           <option value="waves">파도 · 부드럽게 밀려오는 물결</option>
           <option value="wind">바람 · 낮고 포근한 바람결</option>
@@ -123,6 +146,7 @@
           <option value="pad">화음 · 따뜻하게 번지는 여운</option>
         </select>
         <div class="sound-grid" aria-label="사운드 선택 및 미리듣기">
+          <button class="secondary" data-sound="silent" aria-pressed="false">무음 선택</button>
           <button class="secondary" data-sound="tick" aria-pressed="true">시계 초침 듣기</button>
           <button class="secondary" data-sound="rain" aria-pressed="false">빗소리 듣기</button>
           <button class="secondary" data-sound="waves" aria-pressed="false">파도 듣기</button>
@@ -202,6 +226,9 @@
   let nextCheckAt = 0;
   let bellCount = 0;
   let pageScore = 0;
+  const hourlyStorageKey = 'focus-camera-test.hourly-scores.v1';
+  let hourlyScores = {date:'', hours:Array(24).fill(0)};
+  let hourlyStorageDirty = false;
   let observed = 0;
   let frontObserved = 0;
   let currentPose = null;
@@ -305,7 +332,7 @@
       if (!raw) return;
       const saved = JSON.parse(raw);
       if (!saved || saved.version !== 1) throw new Error('Invalid settings data');
-      if (['tick','rain','waves','wind','chime','pad'].includes(saved.soundPreset)) {
+      if (['silent','tick','rain','waves','wind','chime','pad'].includes(saved.soundPreset)) {
         $('soundPreset').value = saved.soundPreset;
       }
       if (Number.isFinite(saved.soundVolume) && saved.soundVolume >= 0 && saved.soundVolume <= 100 && saved.soundVolume % 5 === 0) {
@@ -326,6 +353,68 @@
     } catch (err) {
       $('settingsSummary').textContent = '설정 저장에 실패했습니다. 이번 접속에서만 적용됩니다.';
     }
+  }
+
+  function localDateKey(now) {
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  }
+
+  function restoreHourlyScores(now=new Date()) {
+    const date=localDateKey(now);
+    if (hourlyScores.date!==date) { hourlyScores={date, hours:Array(24).fill(0)}; hourlyStorageDirty=false; }
+    if (hourlyStorageDirty) return;
+    try {
+      const raw=window.localStorage.getItem(hourlyStorageKey);
+      if (!raw) return;
+      const saved=JSON.parse(raw);
+      if (!saved || saved.version!==1 || !Array.isArray(saved.hours) || saved.hours.length!==24 ||
+          !saved.hours.every(value=>Number.isSafeInteger(value) && value>=0)) throw new Error('Invalid hourly scores');
+      if (saved.date===date) hourlyScores={date, hours:saved.hours.slice()};
+    } catch (err) {
+      $('chartStorageStatus').textContent='저장된 기록을 불러오지 못했습니다. 이번 접속에서는 기록을 계속합니다.';
+    }
+  }
+
+  function renderHourlyChart() {
+    const hours=hourlyScores.hours;
+    const total=hours.reduce((sum,value)=>sum+value,0);
+    $('dailyTotal').textContent=`오늘 합계 ${total}점`;
+    $('chartDate').textContent=`${hourlyScores.date} · 0–23시`;
+    const left=42, top=28, bottom=188, plotHeight=bottom-top, slot=31;
+    const maximum=Math.max(4,Math.ceil(Math.max(...hours)/4)*4);
+    let svg='';
+    for (let tick=0;tick<=4;tick++) {
+      const value=maximum*tick/4, y=bottom-plotHeight*tick/4;
+      svg+=`<line x1="${left}" y1="${y}" x2="${left+24*slot}" y2="${y}" stroke="#27354c"/><text x="${left-8}" y="${y+4}" text-anchor="end" fill="#a3b1c9" font-size="11">${value}</text>`;
+    }
+    hours.forEach((value,hour)=>{
+      const height=value/maximum*plotHeight, x=left+hour*slot+5;
+      svg+=`<g><title>${hour}시: ${value}점</title><rect x="${x}" y="${bottom-height}" width="21" height="${height}" rx="3" fill="#56e1ae"/>`;
+      if (value) svg+=`<text x="${x+10.5}" y="${bottom-height-6}" text-anchor="middle" fill="#edf4ff" font-size="10">${value}</text>`;
+      svg+=`<text x="${x+10.5}" y="${bottom+20}" text-anchor="middle" fill="#a3b1c9" font-size="11">${hour}</text></g>`;
+    });
+    $('hourlyChart').innerHTML=svg;
+    $('hourlyChart').setAttribute('aria-label',`오늘 시간대별 누적 점수. 합계 ${total}점. `+hours.map((value,hour)=>`${hour}시 ${value}점`).join(', '));
+  }
+
+  function recordHourlyPoint() {
+    const now=new Date();
+    restoreHourlyScores(now);
+    hourlyScores.hours[now.getHours()]+=1;
+    try {
+      window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:1,...hourlyScores}));
+      hourlyStorageDirty=false;
+      $('chartStorageStatus').textContent='오늘의 점수를 이 브라우저에 저장했습니다.';
+    } catch (err) {
+      hourlyStorageDirty=true;
+      $('chartStorageStatus').textContent='기록 저장에 실패했습니다. 이번 접속에서만 기록이 유지됩니다.';
+    }
+    renderHourlyChart();
+  }
+
+  function refreshHourlyChart() {
+    restoreHourlyScores();
+    renderHourlyChart();
   }
 
   function drawFace(p, isFront) {
@@ -451,6 +540,7 @@
     return $('soundPreset').selectedOptions[0].textContent.split(' · ')[0];
   }
   function playSelectedSound() {
+    if ($('soundPreset').value==='silent') { stopSounds(); return false; }
     if (!audioCtx || audioCtx.state!=='running' || !audioBus) return false;
     stopSounds();
     if (Number($('soundVolume').value)===0) return false;
@@ -470,6 +560,11 @@
       button.setAttribute('aria-pressed',String(button.dataset.sound===$('soundPreset').value)));
   }
   async function previewSound() {
+    if ($('soundPreset').value==='silent') {
+      stopSounds();
+      notify('무음 모드입니다. 얼굴 감지는 계속하며 소리와 점수 증가는 멈춥니다.');
+      return;
+    }
     try {
       await unlockAudio();
       const played=playSelectedSound();
@@ -490,9 +585,11 @@
         $('bells').textContent=String(bellCount);
         pageScore+=1;
         $('score').textContent=String(pageScore);
+        recordHourlyPoint();
         notify(`정면 상태 확인! ${selectedSoundLabel()} 소리를 재생했습니다.`);
       } else {
-        notify('정면이 감지되었지만 소리를 재생하지 못했습니다. 소리 크기를 확인하고 ‘선택한 소리 다시 듣기’를 눌러 주세요.');
+        notify($('soundPreset').value==='silent' ? '정면 상태 확인 · 무음 모드에서는 소리와 점수가 추가되지 않습니다.' :
+          '정면이 감지되었지만 소리를 재생하지 못했습니다. 소리 크기를 확인하고 ‘선택한 소리 다시 듣기’를 눌러 주세요.');
       }
     } else {
       notify('이번 확인에서는 정면 상태가 충분히 유지되지 않아 소리를 재생하지 않았습니다.');
@@ -614,6 +711,7 @@
   });
   intervalSelect.addEventListener('change',()=>{persistSettings();restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
   document.addEventListener('visibilitychange',()=>{
+    if (!document.hidden) refreshHourlyChart();
     if (document.hidden) stopSounds();
     if (document.hidden && running) {
       stop(); notify('Safari가 백그라운드로 이동해 개인정보 보호를 위해 카메라를 중지했습니다. 다시 시작해 주세요.');
@@ -625,6 +723,9 @@
   restoreSettings();
   updateSoundSelection();
   $('volumeLabel').textContent=`${$('soundVolume').value}%`;
+  refreshHourlyChart();
+  setInterval(refreshHourlyChart,30000);
+  window.addEventListener('storage',event=>{if(event.key===hourlyStorageKey || event.key===null) refreshHourlyChart();});
   start({automatic:true});
 })();
 </script>
