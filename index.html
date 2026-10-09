@@ -33,8 +33,9 @@
     .live-pill { position:absolute; top:13px; left:13px; z-index:3; font-size:12px; font-weight:800; padding:8px 11px; border-radius:999px; background:rgba(7,12,23,.80); border:1px solid #45536b; }
     .live-pill::before { content:""; width:8px; height:8px; border-radius:50%; display:inline-block; background:#72819a; margin-right:7px; }
     .live-pill.on::before { background:var(--mint); box-shadow:0 0 0 3px #56e1ae25; }
-    .score-pill { position:absolute; top:13px; right:13px; z-index:3; padding:8px 12px; border-radius:14px; background:rgba(7,12,23,.85); border:1px solid var(--mint); color:var(--mint); font-size:12px; font-weight:800; text-align:center; pointer-events:none; }
-    .score-pill strong { display:block; font-size:26px; line-height:1.2; font-variant-numeric:tabular-nums; }
+    .camera-counts { position:absolute; top:13px; right:13px; z-index:3; display:flex; gap:6px; pointer-events:none; }
+    .score-pill { padding:7px 9px; border-radius:14px; background:rgba(7,12,23,.85); border:1px solid var(--mint); color:var(--mint); font-size:12px; font-weight:800; text-align:center; pointer-events:none; }
+    .score-pill strong { display:block; font-size:24px; line-height:1.2; font-variant-numeric:tabular-nums; }
     .camera-bottom { padding:17px 18px 20px; }
     .status { display:flex; align-items:center; justify-content:space-between; gap:12px; }
     .status strong { font-size:20px; }
@@ -120,7 +121,7 @@
           <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>페이지를 열면 자동으로 카메라를 시작합니다.<br>셀카 카메라 사용을 허용하세요.</p></div>
         </div>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
-        <div class="score-pill" aria-label="확인 동작 횟수">체크수<strong id="checkCount">0</strong></div>
+        <div class="camera-counts"><div class="score-pill" aria-label="몰입수">몰입수<strong id="focusCount">0</strong></div><div class="score-pill" aria-label="전체 체크수">체크수<strong id="checkCount">0</strong></div></div>
         <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
         <button id="audioEnableBtn" class="audio-enable">♪ 소리 켜기</button>
       </div>
@@ -187,7 +188,7 @@
           <option value="5000">5초마다</option>
           <option value="10000">10초마다</option>
         </select>
-        <p class="hint">확인 순간 직전 약 1초간 정면 상태가 안정적으로 유지되어야 소리가 납니다. 고개를 돌리거나 얼굴이 사라지면 울리지 않습니다.</p>
+        <p class="hint">선택한 확인 간격 내 모든 얼굴 분석에서 정면이 유지되어야 몰입으로 판정합니다. 고개를 돌리거나 얼굴이 사라지거나 분석이 끊기면 해당 구간은 제외합니다.</p>
       </div>
     </section>
     <section class="panel controls" data-panel="sound" aria-label="소리">
@@ -275,6 +276,9 @@
   let nextCheckAt = 0;
   let bellCount = 0;
   let checkCount = 0;
+  let focusCount = 0;
+  let checkWindowStartedAt = 0;
+  const maxObservationGapMs = 750;
   const hourlyStorageKey = 'focus-camera-test.hourly-scores.v3';
   const previousHourlyStorageKey = 'focus-camera-test.hourly-scores.v2';
   const legacyHourlyStorageKey = 'focus-camera-test.hourly-scores.v1';
@@ -646,7 +650,7 @@
         `${baselines.length ? `기준 ${currentPose.referenceIndex+1}` : '기본 기준'} · 방향 편차 ${Math.round(currentPose.yawDelta*100)} · 기울기 ${Math.round(currentPose.rollDelta)}°`);
       drawFace(landmarks,currentPose.front);
     }
-    recentFrames = recentFrames.filter(f => now - f.t < 1800);
+    recentFrames = recentFrames.filter(f => f.t >= checkWindowStartedAt);
     const ratio = observed ? Math.round(frontObserved / observed * 100) : 0;
     $('frontRatio').textContent = observed ? `${ratio}%` : '—';
     $('meterFill').style.width = `${ratio}%`;
@@ -789,17 +793,25 @@
     checkFlashAnimation=$('checkFlash').animate([{opacity:0},{opacity:.28,offset:.15},{opacity:0}],{duration:180,easing:'ease-out'});
   }
 
+  function heldFrontForCheck(now) {
+    const frames=recentFrames.filter(f=>f.t>=checkWindowStartedAt && f.t<=now);
+    if (frames.length<3 || frames.some(f=>!f.face || !f.front)) return false;
+    if (frames[0].t-checkWindowStartedAt>maxObservationGapMs || now-frames[frames.length-1].t>maxObservationGapMs) return false;
+    return frames.every((frame,index)=>index===0 || frame.t-frames[index-1].t<=maxObservationGapMs);
+  }
+
   function checkFront(intervalSeconds=Number(intervalSelect.value)/1000) {
     if (!running) return;
     checkCount+=1;
     $('checkCount').textContent=String(checkCount);
     flashCheck();
     const now=performance.now();
-    const nearby=recentFrames.filter(f => now-f.t<1300);
-    const faces=nearby.filter(f=>f.face);
-    const front=faces.filter(f=>f.front);
-    // Require recent continuous positive evidence, not merely presence at one instant.
-    if (nearby.length>=3 && faces.length>=3 && faces.length/nearby.length>=.85 && front.length/faces.length>=.75) {
+    const heldFront=heldFrontForCheck(now);
+    checkWindowStartedAt=now;
+    recentFrames=[];
+    if (heldFront) {
+      focusCount+=1;
+      $('focusCount').textContent=String(focusCount);
       recordHourlyPoint(intervalSeconds);
       let played=false;
       try { played=playSelectedSound(); } catch(err) { updateAudioStatus(); }
@@ -813,14 +825,16 @@
           `정면 확인 +${intervalSeconds}점 · 소리를 켜려면 카메라 화면의 ‘소리 켜기’를 눌러 주세요.`);
       }
     } else {
-      notify('이번 확인에서는 정면 상태가 충분히 유지되지 않아 소리를 재생하지 않았습니다.');
+      notify('이번 확인 간격 전체에서 정면 유지가 확인되지 않아 몰입 판정과 점수를 추가하지 않았습니다.');
     }
   }
   function restartCheckTimer() {
     clearInterval(checkTimer);
     if (!running) return;
     const ms=Number(intervalSelect.value);
-    nextCheckAt=performance.now()+ms;
+    checkWindowStartedAt=performance.now();
+    recentFrames=[];
+    nextCheckAt=checkWindowStartedAt+ms;
     checkTimer=setInterval(()=>{checkFront(ms/1000);nextCheckAt=performance.now()+ms;},ms);
   }
   function updateClock() {
@@ -906,6 +920,7 @@
     if (!running || !currentPose) {notify('먼저 카메라에 얼굴이 보이도록 해 주세요.');return;}
     baselines.push({yaw:currentPose.yaw,roll:currentPose.roll,pitch:currentPose.pitch});
     recentFrames=[];
+    restartCheckTimer();
     const saved = persistCalibrations();
     updateCalibrationSummary();
     notify(`◎ 정면 기준 ${baselines.length}을 추가했습니다. 기존 기준도 유지됩니다. ` +
@@ -914,6 +929,7 @@
   $('resetCalibrationBtn').addEventListener('click',()=>{
     baselines=[];
     recentFrames=[];
+    restartCheckTimer();
     const cleared = persistCalibrations();
     updateCalibrationSummary();
     notify(cleared ? '등록한 정면 기준과 저장된 기준을 모두 지웠습니다. 원하는 자세를 다시 추가해 주세요.' :
