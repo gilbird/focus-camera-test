@@ -129,7 +129,7 @@
         <button id="cameraToggleBtn" class="camera-toggle" aria-label="카메라 켜기" aria-pressed="false">▶ 카메라 켜기</button>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
         <div class="camera-counts"><div class="score-pill" aria-label="몰입수">몰입수<strong id="focusCount">0</strong></div><div class="score-pill" aria-label="전체 체크수">체크수<strong id="checkCount">0</strong></div></div>
-        <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
+        <button id="calibrateBtn" class="calibrate" disabled>정면 기준 추가(0)</button>
         <button id="audioEnableBtn" class="audio-enable" aria-label="소리 켜기" aria-pressed="false">♪ 소리 켜기</button>
       </div>
       <div class="camera-bottom">
@@ -359,6 +359,7 @@
   }
 
   function updateCalibrationSummary() {
+    calibrateBtn.textContent=`정면 기준 추가(${baselines.length})`;
     $('calibrationSummary').textContent = `등록된 정면 기준: ${baselines.length}개` +
       (baselines.length ? ' · 등록 기준 중 하나와 일치하면 정면' : ' · 기본 기준 사용 중') +
       (calibrationStorageStatus ? ` · ${calibrationStorageStatus}` : '');
