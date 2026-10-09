@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0a1224">
-  <title>정면 감지 · 사운드 테스트</title>
+  <title>정면 감지 · 사운드</title>
   <style>
     :root { color-scheme: dark; --bg:#080e1b; --card:#111c30; --line:#27354c; --txt:#edf4ff; --sub:#a3b1c9; --mint:#56e1ae; --amber:#ffcc78; }
     * { box-sizing:border-box; }
@@ -44,6 +44,8 @@
     button.primary { flex:1; color:#082218; background:var(--mint); }
     button.secondary { color:#e8f1fd; background:#263751; }
     .cam button.calibrate { position:absolute; left:13px; bottom:13px; z-index:3; color:#082218; background:var(--mint); box-shadow:0 2px 12px #0006; }
+    .cam button.audio-enable { position:absolute; right:13px; bottom:13px; z-index:3; background:#263751; color:#edf4ff; }
+    .cam button.audio-enable[hidden] { display:none; }
     button:disabled { cursor:not-allowed; opacity:.45; }
     .label { font-size:13px; color:#c3d0df; font-weight:700; }
     select { width:100%; background:#10192a; border:1px solid #40516c; color:white; padding:13px; border-radius:11px; font-size:15px; margin-top:8px; }
@@ -77,9 +79,9 @@
 <body>
 <main>
   <header>
-    <div class="eyebrow">FOCUS ASSISTANT · CAMERA TEST</div>
+    <div class="eyebrow">FOCUS ASSISTANT · CAMERA</div>
     <h1>정면을 보면, 기분 좋은 소리</h1>
-    <p class="lead">아이폰 전면 카메라로 얼굴 방향을 확인하는 간단한 테스트입니다.<br>마음에 드는 소리를 골라 정면 감지 때의 느낌을 비교해 보세요.</p>
+    <p class="lead">아이폰 전면 카메라로 얼굴 방향을 확인하는 정면 감지 도구입니다.<br>마음에 드는 소리를 골라 정면 감지 때의 느낌을 비교해 보세요.</p>
   </header>
 
   <div class="layout">
@@ -94,6 +96,7 @@
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
         <div class="score-pill" aria-label="정면 감지 점수">점수<strong id="score">0</strong></div>
         <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
+        <button id="audioEnableBtn" class="audio-enable">♪ 소리 켜기</button>
       </div>
       <div class="camera-bottom">
         <div class="status">
@@ -113,15 +116,15 @@
     <div class="chart-scroll">
       <svg id="hourlyChart" viewBox="0 0 820 230" role="img" aria-label="오늘 0시부터 23시까지 시간대별 누적 점수 막대 차트"></svg>
     </div>
-    <p class="hint">각 막대는 해당 시간에 얻은 점수의 합계입니다. 화면 점수가 초기화되어도 오늘 기록은 유지됩니다. 시간대는 기기의 현지 시간을 기준으로 합니다.</p>
+    <p class="hint">각 막대는 오늘 해당 시간에 얻은 점수의 합계입니다. 점수를 얻은 순간의 날짜·시간대와 함께 저장하며 이전 날짜 기록도 유지합니다. 시간대는 기기의 현지 시간을 기준으로 합니다.</p>
     <p class="hint" id="chartStorageStatus" role="status"></p>
   </section>
 
     </div>
 
-    <section class="panel controls" aria-label="테스트 설정">
+    <section class="panel controls" aria-label="설정">
       <div>
-        <h2>테스트 제어</h2>
+        <h2>카메라 제어</h2>
         <div class="btns">
           <button id="startBtn" class="primary">▶ 카메라 시작</button>
           <button id="stopBtn" class="secondary" disabled>■ 정지</button>
@@ -137,7 +140,7 @@
         <h2>어떤 소리가 기분 좋은가요?</h2>
         <label class="label" for="soundPreset">정면 감지 사운드</label>
         <select id="soundPreset">
-          <option value="silent">무음 · 소리와 점수 증가 없이 감지</option>
+          <option value="silent">무음 · 소리 없이 점수 누적</option>
           <option value="tick" selected>시계 초침 · 짧고 가벼운 틱</option>
           <option value="rain">빗소리 · 가볍게 쏟아지는 비</option>
           <option value="waves">파도 · 부드럽게 밀려오는 물결</option>
@@ -175,7 +178,7 @@
       <div>
         <div class="label">실시간 누적 통계</div>
         <div class="metrics" style="margin-top:9px">
-          <div class="metric"><span>테스트 경과</span><strong id="elapsed">00:00</strong></div>
+          <div class="metric"><span>측정 경과</span><strong id="elapsed">00:00</strong></div>
           <div class="metric"><span>사운드 알림 횟수</span><strong id="bells">0</strong></div>
           <div class="metric"><span>정면 관찰 비율*</span><strong id="frontRatio">—</strong></div>
           <div class="metric"><span>다음 확인까지</span><strong id="nextCheck">—</strong></div>
@@ -192,12 +195,12 @@
     <ol>
       <li>아이폰 Safari에서 <span class="tag">HTTPS 주소</span>로 접속합니다. (맥에서는 <span class="tag">localhost</span>도 가능)</li>
       <li>페이지를 열면 카메라 시작을 자동으로 시도합니다. 전면 카메라 권한을 허용하세요. 자동 시작이 제한되면 <strong>카메라 시작</strong>을 누르세요.</li>
-      <li>자동 시작 후에는 <strong>선택한 소리 다시 듣기</strong>나 사운드 미리듣기 버튼을 한 번 눌러 소리를 활성화하세요.</li>
+      <li>정면이 유지되면 소리 재생 여부와 관계없이 점수가 올라갑니다. 소리 자동 재생이 제한되면 카메라 우측 하단의 <strong>소리 켜기</strong>를 한 번 누르세요.</li>
       <li>폰을 책상에 세워 놓고, 작업할 때의 자세에서 <strong>정면 기준 추가</strong>를 누릅니다. 다른 작업 자세도 같은 버튼으로 추가할 수 있습니다.</li>
       <li>원하는 사운드를 선택하고, 얼굴을 좌우로 돌렸다가 등록한 자세로 돌아오며 소리를 확인합니다.</li>
-      <li>테스트를 마치면 <strong>정지</strong>를 눌러 카메라를 종료합니다.</li>
+      <li>측정을 마치면 <strong>정지</strong>를 눌러 카메라를 종료합니다.</li>
     </ol>
-    <p class="note">브라우저 보안 정책으로 <strong>파일 앱에서 HTML을 직접 여는 방식(file://)</strong>은 카메라가 작동하지 않을 수 있습니다. HTTPS 웹사이트로 배포해 테스트하세요. 화면이 잠기거나 Safari가 백그라운드로 이동하면 카메라 분석이 중지될 수 있습니다. 영상은 기기에서 처리하며 서버로 업로드하지 않습니다. 단, 얼굴 인식 라이브러리는 처음 실행 시 CDN에서 내려받습니다.</p>
+    <p class="note">브라우저 보안 정책으로 <strong>파일 앱에서 HTML을 직접 여는 방식(file://)</strong>은 카메라가 작동하지 않을 수 있습니다. HTTPS 웹사이트로 배포해 사용하세요. 화면이 잠기거나 Safari가 백그라운드로 이동하면 카메라 분석이 중지될 수 있습니다. 영상은 기기에서 처리하며 서버로 업로드하지 않습니다. 단, 얼굴 인식 라이브러리는 처음 실행 시 CDN에서 내려받습니다.</p>
   </section>
 </main>
 <script>
@@ -226,7 +229,9 @@
   let nextCheckAt = 0;
   let bellCount = 0;
   let pageScore = 0;
-  const hourlyStorageKey = 'focus-camera-test.hourly-scores.v1';
+  const hourlyStorageKey = 'focus-camera-test.hourly-scores.v2';
+  const legacyHourlyStorageKey = 'focus-camera-test.hourly-scores.v1';
+  let hourlyRecords = [];
   let hourlyScores = {date:'', hours:Array(24).fill(0)};
   let hourlyStorageDirty = false;
   let observed = 0;
@@ -361,25 +366,37 @@
 
   function restoreHourlyScores(now=new Date()) {
     const date=localDateKey(now);
-    if (hourlyScores.date!==date) { hourlyScores={date, hours:Array(24).fill(0)}; hourlyStorageDirty=false; }
-    if (hourlyStorageDirty) return;
-    try {
+    if (!hourlyStorageDirty) try {
       const raw=window.localStorage.getItem(hourlyStorageKey);
-      if (!raw) return;
-      const saved=JSON.parse(raw);
-      if (!saved || saved.version!==1 || !Array.isArray(saved.hours) || saved.hours.length!==24 ||
-          !saved.hours.every(value=>Number.isSafeInteger(value) && value>=0)) throw new Error('Invalid hourly scores');
-      if (saved.date===date) hourlyScores={date, hours:saved.hours.slice()};
+      if (raw) {
+        const saved=JSON.parse(raw);
+        if (!saved || saved.version!==2 || !Array.isArray(saved.records) || !saved.records.every(row=>row &&
+            /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isInteger(row.hour) && row.hour>=0 && row.hour<24 &&
+            Number.isSafeInteger(row.score) && row.score>=0)) throw new Error('Invalid hourly records');
+        hourlyRecords=saved.records.map(({date,hour,score})=>({date,hour,score}));
+      } else {
+        const legacyRaw=window.localStorage.getItem(legacyHourlyStorageKey);
+        if (legacyRaw) {
+          const legacy=JSON.parse(legacyRaw);
+          if (!legacy || legacy.version!==1 || !/^\d{4}-\d{2}-\d{2}$/.test(legacy.date) ||
+              !Array.isArray(legacy.hours) || legacy.hours.length!==24 ||
+              !legacy.hours.every(value=>Number.isSafeInteger(value) && value>=0)) throw new Error('Invalid legacy scores');
+          hourlyRecords=legacy.hours.map((score,hour)=>({date:legacy.date,hour,score}));
+          window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:2,records:hourlyRecords}));
+        }
+      }
     } catch (err) {
       $('chartStorageStatus').textContent='저장된 기록을 불러오지 못했습니다. 이번 접속에서는 기록을 계속합니다.';
     }
+    hourlyScores={date,hours:Array(24).fill(0)};
+    hourlyRecords.filter(row=>row.date===date).forEach(row=>{hourlyScores.hours[row.hour]+=row.score;});
   }
 
   function renderHourlyChart() {
     const hours=hourlyScores.hours;
     const total=hours.reduce((sum,value)=>sum+value,0);
     $('dailyTotal').textContent=`오늘 합계 ${total}점`;
-    $('chartDate').textContent=`${hourlyScores.date} · 0–23시`;
+    $('chartDate').textContent=`${hourlyScores.date} · 0–23시 · 현재 ${String(new Date().getHours()).padStart(2,'0')}시`;
     const left=42, top=28, bottom=188, plotHeight=bottom-top, slot=31;
     const maximum=Math.max(4,Math.ceil(Math.max(...hours)/4)*4);
     let svg='';
@@ -400,11 +417,15 @@
   function recordHourlyPoint() {
     const now=new Date();
     restoreHourlyScores(now);
-    hourlyScores.hours[now.getHours()]+=1;
+    const date=localDateKey(now), hour=now.getHours();
+    const record=hourlyRecords.find(row=>row.date===date && row.hour===hour);
+    if (record) record.score+=1;
+    else hourlyRecords.push({date,hour,score:1});
+    hourlyScores.hours[hour]+=1;
     try {
-      window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:1,...hourlyScores}));
+      window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:2,records:hourlyRecords}));
       hourlyStorageDirty=false;
-      $('chartStorageStatus').textContent='오늘의 점수를 이 브라우저에 저장했습니다.';
+      $('chartStorageStatus').textContent=`${date} ${String(hour).padStart(2,'0')}시 기록 저장 · 이전 날짜 기록도 보존합니다.`;
     } catch (err) {
       hourlyStorageDirty=true;
       $('chartStorageStatus').textContent='기록 저장에 실패했습니다. 이번 접속에서만 기록이 유지됩니다.';
@@ -459,17 +480,32 @@
     $('meterFill').style.width = `${ratio}%`;
   }
 
-  async function unlockAudio() {
+  function prepareAudio() {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) throw new Error('이 브라우저에서는 오디오 기능을 지원하지 않습니다.');
     audioCtx ||= new AudioContext();
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    audioCtx.onstatechange=updateAudioStatus;
     if (!audioBus) {
       audioBus = audioCtx.createGain();
       audioBus.connect(audioCtx.destination);
     }
     audioBus.gain.value = Number($('soundVolume').value) / 100;
     return audioCtx;
+  }
+  function updateAudioStatus() {
+    $('audioEnableBtn').hidden=$('soundPreset').value==='silent' || Number($('soundVolume').value)===0 || audioCtx?.state==='running';
+  }
+  async function unlockAudio() {
+    prepareAudio();
+    if (audioCtx.state !== 'running') await audioCtx.resume();
+    updateAudioStatus();
+    return audioCtx;
+  }
+  function attemptAudioStart() {
+    if ($('soundPreset').value==='silent' || Number($('soundVolume').value)===0) { updateAudioStatus(); return; }
+    // Do not await this from camera startup: Safari may keep resume pending until a real touch.
+    try { unlockAudio().catch(()=>updateAudioStatus()); }
+    catch (err) { updateAudioStatus(); }
   }
   function trackSound(source, nodes) {
     activeSounds.add(source);
@@ -558,17 +594,19 @@
   function updateSoundSelection() {
     document.querySelectorAll('[data-sound]').forEach(button =>
       button.setAttribute('aria-pressed',String(button.dataset.sound===$('soundPreset').value)));
+    updateAudioStatus();
   }
   async function previewSound() {
     if ($('soundPreset').value==='silent') {
       stopSounds();
-      notify('무음 모드입니다. 얼굴 감지는 계속하며 소리와 점수 증가는 멈춥니다.');
+      notify('무음 모드입니다. 정면 감지 점수와 시간대별 기록은 계속 누적됩니다.');
       return;
     }
     try {
       await unlockAudio();
       const played=playSelectedSound();
-      notify(played ? `${selectedSoundLabel()} 미리듣기 · 정면 감지에도 이 소리를 사용합니다.` : '소리 크기가 0%입니다. 소리 크기를 올려 주세요.');
+      notify(played ? `${selectedSoundLabel()} 미리듣기 · 정면 감지에도 이 소리를 사용합니다.` :
+        (Number($('soundVolume').value)===0 ? '소리 크기가 0%입니다. 소리 크기를 올려 주세요.' : '소리 재생이 제한되어 있습니다. ‘소리 켜기’를 눌러 주세요.'));
     } catch(err) {notify(`소리 재생 실패: ${err.message}`);}
   }
 
@@ -580,16 +618,19 @@
     const front=faces.filter(f=>f.front);
     // Require recent continuous positive evidence, not merely presence at one instant.
     if (nearby.length>=3 && faces.length>=3 && faces.length/nearby.length>=.85 && front.length/faces.length>=.75) {
-      if (playSelectedSound()) {
+      pageScore+=1;
+      $('score').textContent=String(pageScore);
+      recordHourlyPoint();
+      let played=false;
+      try { played=playSelectedSound(); } catch(err) { updateAudioStatus(); }
+      if (played) {
         bellCount+=1;
         $('bells').textContent=String(bellCount);
-        pageScore+=1;
-        $('score').textContent=String(pageScore);
-        recordHourlyPoint();
-        notify(`정면 상태 확인! ${selectedSoundLabel()} 소리를 재생했습니다.`);
+        notify(`정면 확인 +1점! ${selectedSoundLabel()} 소리를 재생했습니다.`);
       } else {
-        notify($('soundPreset').value==='silent' ? '정면 상태 확인 · 무음 모드에서는 소리와 점수가 추가되지 않습니다.' :
-          '정면이 감지되었지만 소리를 재생하지 못했습니다. 소리 크기를 확인하고 ‘선택한 소리 다시 듣기’를 눌러 주세요.');
+        updateAudioStatus();
+        notify($('soundPreset').value==='silent' || Number($('soundVolume').value)===0 ? '정면 확인 +1점 · 소리 없이 점수를 누적합니다.' :
+          '정면 확인 +1점 · 소리를 켜려면 카메라 화면의 ‘소리 켜기’를 눌러 주세요.');
       }
     } else {
       notify('이번 확인에서는 정면 상태가 충분히 유지되지 않아 소리를 재생하지 않았습니다.');
@@ -628,7 +669,7 @@
     try {
       // Automatic camera startup must not wait on audio requiring a user gesture.
       // A real start or preview click unlocks Web Audio on iOS Safari.
-      if (!automatic) await unlockAudio();
+      attemptAudioStart();
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('카메라를 사용할 수 없습니다. iPhone에서는 HTTPS로 접속했는지 확인하세요.');
       mediaStream=await navigator.mediaDevices.getUserMedia({
         audio:false, video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:15,max:30}}
@@ -651,8 +692,8 @@
       setState('얼굴 분석 시작', '', '폰을 고정하고 작업 자세에서 ‘정면 기준 추가’를 눌러 보세요.');
       restartCheckTimer();
       uiTimer=setInterval(updateClock,250);
-      notify(automatic ? '카메라를 자동으로 시작했습니다. 소리를 켜려면 사운드 미리듣기 버튼을 한 번 눌러 주세요.' :
-        '테스트를 시작했습니다. 원하는 작업 자세를 정면 기준으로 추가해 주세요.');
+      updateAudioStatus();
+      notify('카메라를 시작했습니다. 정면 감지가 유지되면 점수가 올라갑니다. 소리가 안 나면 ‘소리 켜기’를 눌러 주세요.');
       detectLoop(runId);
     } catch(err) {
       notify(`${automatic ? '자동 시작 실패' : '시작 실패'}: ${err.message} ‘카메라 시작’을 눌러 다시 시도해 주세요.`);
@@ -677,7 +718,7 @@
     setState('측정 중지', '', '카메라가 종료되었습니다.');
   }
   startBtn.addEventListener('click',()=>start());
-  stopBtn.addEventListener('click',()=>{ stop();notify('테스트를 중지하고 카메라를 종료했습니다.'); });
+  stopBtn.addEventListener('click',()=>{ stop();notify('측정을 중지하고 카메라를 종료했습니다.'); });
   calibrateBtn.addEventListener('click',()=>{
     if (!running || !currentPose) {notify('먼저 카메라에 얼굴이 보이도록 해 주세요.');return;}
     baselines.push({yaw:currentPose.yaw,roll:currentPose.roll,pitch:currentPose.pitch});
@@ -696,6 +737,7 @@
       '이번 접속의 기준은 초기화했지만 저장된 기준 삭제에 실패했습니다. 다음 접속에서 이전 기준이 복원될 수 있습니다.');
   });
   $('soundBtn').addEventListener('click',previewSound);
+  $('audioEnableBtn').addEventListener('click',previewSound);
   $('soundStopBtn').addEventListener('click',()=>{stopSounds();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
   $('soundPreset').addEventListener('change',()=>{stopSounds();updateSoundSelection();persistSettings();notify(`${selectedSoundLabel()}을 정면 감지 사운드로 선택했습니다.`);});
   document.querySelectorAll('[data-sound]').forEach(button=>button.addEventListener('click',()=>{
@@ -708,6 +750,7 @@
     $('volumeLabel').textContent=`${$('soundVolume').value}%`;
     persistSettings();
     if (audioBus) audioBus.gain.setTargetAtTime(Number($('soundVolume').value)/100,audioCtx.currentTime,.02);
+    updateAudioStatus();
   });
   intervalSelect.addEventListener('change',()=>{persistSettings();restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
   document.addEventListener('visibilitychange',()=>{
