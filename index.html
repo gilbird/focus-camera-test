@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0a1224">
-  <title>정면 감지 · 딩동 테스트</title>
+  <title>정면 감지 · 사운드 테스트</title>
   <style>
     :root { color-scheme: dark; --bg:#080e1b; --card:#111c30; --line:#27354c; --txt:#edf4ff; --sub:#a3b1c9; --mint:#56e1ae; --amber:#ffcc78; }
     * { box-sizing:border-box; }
@@ -56,6 +56,10 @@
     ol { margin:0; padding-left:23px; color:#c4d0df; font-size:13px; line-height:1.9; }
     .note { color:var(--sub); font-size:12px; line-height:1.7; margin-top:12px; }
     .tag { color:var(--mint); font-weight:800; }
+    .sound-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+    .sound-grid button { text-align:left; padding:12px; }
+    .sound-grid button[aria-pressed="true"] { outline:2px solid var(--mint); background:#154c3e; }
+    input[type="range"] { width:100%; margin-top:12px; accent-color:var(--mint); }
     @media(max-width:700px){ .layout{grid-template-columns:1fr;} .cam{max-height:none;aspect-ratio:4/4.3;} .controls{padding:16px;} }
   </style>
   <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
@@ -65,8 +69,8 @@
 <main>
   <header>
     <div class="eyebrow">FOCUS ASSISTANT · CAMERA TEST</div>
-    <h1>정면을 보면, 시계 틱톡 ⏱️</h1>
-    <p class="lead">아이폰 전면 카메라로 얼굴 방향을 확인하는 간단한 테스트입니다.<br>설정한 간격마다 정면 상태가 유지되면 두 음으로 알립니다.</p>
+    <h1>정면을 보면, 기분 좋은 소리</h1>
+    <p class="lead">아이폰 전면 카메라로 얼굴 방향을 확인하는 간단한 테스트입니다.<br>마음에 드는 소리를 골라 정면 감지 때의 느낌을 비교해 보세요.</p>
   </header>
 
   <div class="layout">
@@ -99,10 +103,36 @@
       <div class="btns">
         <button id="calibrateBtn" class="secondary" disabled>◎ 정면 기준 추가</button>
         <button id="resetCalibrationBtn" class="secondary" disabled>기준 초기화</button>
-        <button id="soundBtn" class="secondary">♪ 시계 초침 소리 테스트</button>
       </div>
       <p class="hint" id="calibrationSummary" role="status">등록된 정면 기준: 0개 · 기본 기준 사용 중</p>
       <p class="hint">작업할 때의 자세마다 ‘정면 기준 추가’를 눌러 주세요. 등록한 기준 중 하나와 일치하면 정면으로 판정합니다. 기준은 이 기기·브라우저에 저장하여 새로고침하거나 다시 접속해도 재사용합니다. ‘기준 초기화’를 누르면 저장된 기준도 삭제합니다. 카메라 위치를 바꾸면 초기화 후 다시 등록하세요.</p>
+      <div>
+        <h2>어떤 소리가 기분 좋은가요?</h2>
+        <label class="label" for="soundPreset">정면 감지 사운드</label>
+        <select id="soundPreset">
+          <option value="tick">시계 초침 · 짧고 가벼운 틱</option>
+          <option value="rain">빗소리 · 가볍게 쏟아지는 비</option>
+          <option value="waves">파도 · 부드럽게 밀려오는 물결</option>
+          <option value="wind">바람 · 낮고 포근한 바람결</option>
+          <option value="chime">차임 · 맑고 부드러운 세 음</option>
+          <option value="pad">화음 · 따뜻하게 번지는 여운</option>
+        </select>
+        <div class="sound-grid" aria-label="사운드 선택 및 미리듣기">
+          <button class="secondary" data-sound="tick" aria-pressed="true">시계 초침 듣기</button>
+          <button class="secondary" data-sound="rain" aria-pressed="false">빗소리 듣기</button>
+          <button class="secondary" data-sound="waves" aria-pressed="false">파도 듣기</button>
+          <button class="secondary" data-sound="wind" aria-pressed="false">바람 듣기</button>
+          <button class="secondary" data-sound="chime" aria-pressed="false">차임 듣기</button>
+          <button class="secondary" data-sound="pad" aria-pressed="false">화음 듣기</button>
+        </div>
+        <p class="hint">버튼을 누르면 소리를 선택하고 바로 미리듣습니다. 카메라 없이도 비교할 수 있습니다. 초침 외 소리는 약 1.4초간 재생하며, 정면 감지 때도 선택한 소리가 납니다.</p>
+        <label class="label" for="soundVolume">소리 크기 <output id="volumeLabel" for="soundVolume">40%</output></label>
+        <input id="soundVolume" type="range" min="0" max="100" value="40" step="5">
+        <div class="btns">
+          <button id="soundBtn" class="secondary">선택한 소리 다시 듣기</button>
+          <button id="soundStopBtn" class="secondary">소리 멈추기</button>
+        </div>
+      </div>
       <div>
         <label class="label" for="interval">정면 확인 간격</label>
         <select id="interval">
@@ -117,7 +147,7 @@
         <div class="label">실시간 누적 통계</div>
         <div class="metrics" style="margin-top:9px">
           <div class="metric"><span>테스트 경과</span><strong id="elapsed">00:00</strong></div>
-          <div class="metric"><span>초침 알림 횟수</span><strong id="bells">0</strong></div>
+          <div class="metric"><span>사운드 알림 횟수</span><strong id="bells">0</strong></div>
           <div class="metric"><span>정면 관찰 비율*</span><strong id="frontRatio">—</strong></div>
           <div class="metric"><span>다음 확인까지</span><strong id="nextCheck">—</strong></div>
         </div>
@@ -134,7 +164,7 @@
       <li>아이폰 Safari에서 <span class="tag">HTTPS 주소</span>로 접속합니다. (맥에서는 <span class="tag">localhost</span>도 가능)</li>
       <li><strong>카메라 시작</strong>을 누르고 전면 카메라 권한을 허용합니다.</li>
       <li>폰을 책상에 세워 놓고, 작업할 때의 자세에서 <strong>정면 기준 추가</strong>를 누릅니다. 다른 작업 자세도 같은 버튼으로 추가할 수 있습니다.</li>
-      <li>얼굴을 좌우로 돌렸다가 다시 정면을 보면서 시계 초침 소리를 확인합니다.</li>
+      <li>원하는 사운드를 선택하고, 얼굴을 좌우로 돌렸다가 등록한 자세로 돌아오며 소리를 확인합니다.</li>
       <li>테스트를 마치면 <strong>정지</strong>를 눌러 카메라를 종료합니다.</li>
     </ol>
     <p class="note">브라우저 보안 정책으로 <strong>파일 앱에서 HTML을 직접 여는 방식(file://)</strong>은 카메라가 작동하지 않을 수 있습니다. HTTPS 웹사이트로 배포해 테스트하세요. 화면이 잠기거나 Safari가 백그라운드로 이동하면 카메라 분석이 중지될 수 있습니다. 영상은 기기에서 처리하며 서버로 업로드하지 않습니다. 단, 얼굴 인식 라이브러리는 처음 실행 시 CDN에서 내려받습니다.</p>
@@ -172,6 +202,8 @@
   let calibrationStorageStatus = '';
   let recentFrames = [];
   let audioCtx = null;
+  let audioBus = null;
+  const activeSounds = new Set();
   const detectionEveryMs = 180;
 
   function notify(message) { $('message').textContent = message; }
@@ -305,15 +337,33 @@
     if (!AudioContext) throw new Error('이 브라우저에서는 오디오 기능을 지원하지 않습니다.');
     audioCtx ||= new AudioContext();
     if (audioCtx.state === 'suspended') await audioCtx.resume();
+    if (!audioBus) {
+      audioBus = audioCtx.createGain();
+      audioBus.connect(audioCtx.destination);
+    }
+    audioBus.gain.value = Number($('soundVolume').value) / 100;
     return audioCtx;
   }
-  function note(frequency, when, duration, volume) {
+  function trackSound(source, nodes) {
+    activeSounds.add(source);
+    source.onended = () => {
+      activeSounds.delete(source);
+      source.disconnect();
+      nodes.forEach(node => node.disconnect());
+    };
+  }
+  function stopSounds() {
+    activeSounds.forEach(source => { try { source.stop(); } catch (err) {} });
+    activeSounds.clear();
+  }
+  function note(frequency, when, duration, volume, attack=.015) {
     const o=audioCtx.createOscillator(), g=audioCtx.createGain();
     o.type='sine'; o.frequency.setValueAtTime(frequency,when);
     g.gain.setValueAtTime(.0001,when);
-    g.gain.exponentialRampToValueAtTime(volume, when+0.015);
+    g.gain.exponentialRampToValueAtTime(volume, when+attack);
     g.gain.exponentialRampToValueAtTime(.0001,when+duration);
-    o.connect(g);g.connect(audioCtx.destination);
+    o.connect(g);g.connect(audioBus);
+    trackSound(o, [g]);
     o.start(when);o.stop(when+duration+0.02);
   }
   function clockTick() {
@@ -332,9 +382,61 @@
     const gain=audioCtx.createGain();
     source.buffer=buffer;
     gain.gain.value=.35;
-    source.connect(gain);gain.connect(audioCtx.destination);
+    source.connect(gain);gain.connect(audioBus);
+    trackSound(source, [gain]);
     source.start(when);
     return true;
+  }
+
+  function ambientNoise(preset, when) {
+    const duration=1.4;
+    const buffer=audioCtx.createBuffer(1,Math.ceil(audioCtx.sampleRate*duration),audioCtx.sampleRate);
+    const data=buffer.getChannelData(0);
+    for (let i=0;i<data.length;i++) {
+      const phase=i/data.length;
+      const swell=Math.sin(Math.PI*phase)**2;
+      const ripple=preset==='rain' ? .8+.2*Math.sin(i*.071) :
+        (preset==='waves' ? .65+.35*Math.sin(Math.PI*phase) : .7+.3*Math.sin(phase*Math.PI*3)**2);
+      data[i]=(Math.random()*2-1)*swell*ripple;
+    }
+    const source=audioCtx.createBufferSource(), filter=audioCtx.createBiquadFilter(), gain=audioCtx.createGain();
+    source.buffer=buffer;
+    filter.type=preset==='rain' ? 'bandpass' : 'lowpass';
+    filter.frequency.value=preset==='rain' ? 3200 : (preset==='waves' ? 1000 : 450);
+    filter.Q.value=preset==='rain' ? .55 : .7;
+    gain.gain.value=preset==='rain' ? .65 : .9;
+    source.connect(filter);filter.connect(gain);gain.connect(audioBus);
+    trackSound(source, [filter,gain]);
+    source.start(when);
+  }
+  function selectedSoundLabel() {
+    return $('soundPreset').selectedOptions[0].textContent.split(' · ')[0];
+  }
+  function playSelectedSound() {
+    if (!audioCtx || audioCtx.state!=='running' || !audioBus) return false;
+    stopSounds();
+    if (Number($('soundVolume').value)===0) return false;
+    const preset=$('soundPreset').value, when=audioCtx.currentTime+.015;
+    if (preset==='tick') return clockTick();
+    if (preset==='chime') {
+      [523.25,659.25,783.99].forEach((frequency,i)=>note(frequency,when+i*.16,1.04,.12));
+    } else if (preset==='pad') {
+      [261.63,329.63,392].forEach(frequency=>note(frequency,when,1.4,.10,.35));
+    } else {
+      ambientNoise(preset,when);
+    }
+    return true;
+  }
+  function updateSoundSelection() {
+    document.querySelectorAll('[data-sound]').forEach(button =>
+      button.setAttribute('aria-pressed',String(button.dataset.sound===$('soundPreset').value)));
+  }
+  async function previewSound() {
+    try {
+      await unlockAudio();
+      const played=playSelectedSound();
+      notify(played ? `${selectedSoundLabel()} 미리듣기 · 정면 감지에도 이 소리를 사용합니다.` : '소리 크기가 0%입니다. 소리 크기를 올려 주세요.');
+    } catch(err) {notify(`소리 재생 실패: ${err.message}`);}
   }
 
   function checkFront() {
@@ -345,12 +447,12 @@
     const front=faces.filter(f=>f.front);
     // Require recent continuous positive evidence, not merely presence at one instant.
     if (nearby.length>=3 && faces.length>=3 && faces.length/nearby.length>=.85 && front.length/faces.length>=.75) {
-      if (clockTick()) {
+      if (playSelectedSound()) {
         bellCount+=1;
         $('bells').textContent=String(bellCount);
-        notify('⏱️ 정면 상태 확인! 시계 초침 소리를 재생했습니다.');
+        notify(`정면 상태 확인! ${selectedSoundLabel()} 소리를 재생했습니다.`);
       } else {
-        notify('정면이 감지되었지만 소리를 재생하지 못했습니다. ‘소리 테스트’를 눌러 주세요.');
+        notify('정면이 감지되었지만 소리를 재생하지 못했습니다. 소리 크기를 확인하고 ‘선택한 소리 다시 듣기’를 눌러 주세요.');
       }
     } else {
       notify('이번 확인에서는 정면 상태가 충분히 유지되지 않아 소리를 재생하지 않았습니다.');
@@ -418,6 +520,7 @@
     }
   }
   function stop() {
+    stopSounds();
     running=false;runId+=1;
     cancelAnimationFrame(frameRequest);
     clearInterval(checkTimer);clearInterval(uiTimer);
@@ -450,12 +553,21 @@
     notify(cleared ? '등록한 정면 기준과 저장된 기준을 모두 지웠습니다. 원하는 자세를 다시 추가해 주세요.' :
       '이번 접속의 기준은 초기화했지만 저장된 기준 삭제에 실패했습니다. 다음 접속에서 이전 기준이 복원될 수 있습니다.');
   });
-  $('soundBtn').addEventListener('click',async()=>{
-    try { await unlockAudio();clockTick();notify('⏱️ 시계 초침 소리 테스트를 재생했습니다. 아이폰 소리 설정도 확인해 주세요.'); }
-    catch(err) {notify(`소리 재생 실패: ${err.message}`);}
+  $('soundBtn').addEventListener('click',previewSound);
+  $('soundStopBtn').addEventListener('click',()=>{stopSounds();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
+  $('soundPreset').addEventListener('change',()=>{stopSounds();updateSoundSelection();notify(`${selectedSoundLabel()}을 정면 감지 사운드로 선택했습니다.`);});
+  document.querySelectorAll('[data-sound]').forEach(button=>button.addEventListener('click',()=>{
+    $('soundPreset').value=button.dataset.sound;
+    updateSoundSelection();
+    previewSound();
+  }));
+  $('soundVolume').addEventListener('input',()=>{
+    $('volumeLabel').textContent=`${$('soundVolume').value}%`;
+    if (audioBus) audioBus.gain.setTargetAtTime(Number($('soundVolume').value)/100,audioCtx.currentTime,.02);
   });
   intervalSelect.addEventListener('change',()=>{restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
   document.addEventListener('visibilitychange',()=>{
+    if (document.hidden) stopSounds();
     if (document.hidden && running) {
       stop(); notify('Safari가 백그라운드로 이동해 개인정보 보호를 위해 카메라를 중지했습니다. 다시 시작해 주세요.');
     }
