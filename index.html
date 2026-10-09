@@ -967,6 +967,7 @@
   }
   function stop() {
     stopSounds();
+    stopVoiceFeedback();
     running=false;runId+=1;
     clearPersonOverlay();
     cancelAnimationFrame(frameRequest);
@@ -1003,6 +1004,35 @@
   $('cameraToggleBtn').addEventListener('click',()=>{if (starting) return;if (running) {stop();notify('카메라를 껐습니다.');}else start();});
   startBtn.addEventListener('click',()=>start());
   stopBtn.addEventListener('click',()=>{ stop();notify('측정을 중지하고 카메라를 종료했습니다.'); });
+  let calibrationSpeech=null;
+  function stopVoiceFeedback() {
+    if (!calibrationSpeech) return;
+    calibrationSpeech=null;
+    window.speechSynthesis?.cancel();
+  }
+  function speakCalibrationAdded() {
+    if (!soundEnabled || Number($('soundVolume').value)===0) return;
+    if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance!=='function') {
+      notify('정면 기준을 추가했습니다. 이 브라우저에서는 음성 안내를 지원하지 않습니다.');
+      return;
+    }
+    try {
+      stopVoiceFeedback();
+      const speech=new window.SpeechSynthesisUtterance('정면 기준 추가했습니다');
+      speech.lang='ko-KR';speech.rate=1;speech.pitch=1;
+      speech.volume=Number($('soundVolume').value)/100;
+      const voice=window.speechSynthesis.getVoices().find(voice=>/^ko(?:-|_)/i.test(voice.lang) || voice.lang==='ko');
+      if (voice) speech.voice=voice;
+      calibrationSpeech=speech;
+      speech.onend=()=>{if (calibrationSpeech===speech) calibrationSpeech=null;};
+      speech.onerror=event=>{
+        if (calibrationSpeech!==speech) return;
+        calibrationSpeech=null;
+        if (event.error!=='canceled' && event.error!=='interrupted') notify('정면 기준을 추가했지만 음성 안내를 재생하지 못했습니다.');
+      };
+      window.speechSynthesis.speak(speech);
+    } catch(err) {calibrationSpeech=null;notify('정면 기준을 추가했지만 음성 안내를 재생하지 못했습니다.');}
+  }
   function addFrontReference() {
     if (!running || !currentPose) {notify('먼저 카메라에 얼굴이 보이도록 해 주세요.');return;}
     baselines.push({yaw:currentPose.yaw,roll:currentPose.roll,pitch:currentPose.pitch});
@@ -1012,6 +1042,7 @@
     updateCalibrationSummary();
     notify(`◎ 정면 기준 ${baselines.length}을 추가했습니다. 기존 기준도 유지됩니다. ` +
       (saved ? '다음 접속에서도 재사용합니다.' : '브라우저 저장에 실패하여 이번 접속에서만 사용합니다.'));
+    speakCalibrationAdded();
   }
   calibrateBtn.addEventListener('click',addFrontReference);
   const cameraSurface=$('cameraSurface');
@@ -1057,6 +1088,7 @@
     if (soundEnabled && audioCtx?.state==='running') {
       soundEnabled=false;
       stopSounds();
+      stopVoiceFeedback();
       if (audioBus) audioBus.gain.value=0;
       persistSettings();updateAudioStatus();
       notify('소리를 껐습니다. 몰입 판정과 점수 기록은 계속됩니다.');
@@ -1074,7 +1106,7 @@
   $('audioEnableBtn').addEventListener('click',toggleCameraSound);
   $('failureSoundBtn').addEventListener('click',previewFailureSound);
   $('failureSoundPreset').addEventListener('change',()=>{stopSounds();persistSettings();updateAudioStatus();previewFailureSound();});
-  $('soundStopBtn').addEventListener('click',()=>{stopSounds();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
+  $('soundStopBtn').addEventListener('click',()=>{stopSounds();stopVoiceFeedback();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
   $('soundPreset').addEventListener('change',()=>{stopSounds();updateSoundSelection();persistSettings();notify(`${selectedSoundLabel()}을 정면 감지 사운드로 선택했습니다.`);});
   document.querySelectorAll('[data-sound]').forEach(button=>button.addEventListener('click',()=>{
     $('soundPreset').value=button.dataset.sound;
@@ -1084,6 +1116,7 @@
   }));
   $('soundVolume').addEventListener('input',()=>{
     $('volumeLabel').textContent=`${$('soundVolume').value}%`;
+    if (Number($('soundVolume').value)===0) stopVoiceFeedback();
     persistSettings();
     if (audioBus) audioBus.gain.setTargetAtTime(soundEnabled ? Number($('soundVolume').value)/100 : 0,audioCtx.currentTime,.02);
     updateAudioStatus();
