@@ -91,6 +91,9 @@
     .color-legend { display:flex; align-items:center; gap:9px; margin-top:8px; color:var(--sub); font-size:11px; }
     .color-legend .ramp { flex:1; max-width:180px; height:9px; border-radius:6px; background:linear-gradient(90deg,#440154 0%, #472d7b 12.5%, #3b528b 25%, #2c728e 37.5%, #21918c 50%, #27ad81 62.5%, #5cc863 75%, #aadc32 87.5%, #fde725 100%); }
     .color-legend span { white-space:nowrap; }
+    .panel-size { display:flex; align-items:center; gap:8px; width:100%; color:var(--sub); font-size:12px; }
+    .panel-size select { width:auto; flex:1; margin:0; padding:8px 10px; font-size:12px; }
+    @media(min-width:700px){ .panel[data-width="full"] { grid-column:1 / -1; } }
   </style>
   <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
@@ -106,7 +109,7 @@
 
   <div class="layout" id="panelLayout">
     <section class="panel" data-panel="camera" aria-label="전면 카메라">
-      <div class="panel-move"><strong>전면 카메라</strong><div class="btns"><button class="secondary" data-move="up" aria-label="전면 카메라 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="전면 카메라 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="전면 카메라 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="전면 카메라 오른쪽으로 이동">→ 오른쪽</button></div></div>
+      <div class="panel-move"><strong>전면 카메라</strong><div class="btns"><button class="secondary" data-move="up" aria-label="전면 카메라 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="전면 카메라 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="전면 카메라 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="전면 카메라 오른쪽으로 이동">→ 오른쪽</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="전면 카메라 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
       <div class="cam">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="personOverlay" hidden aria-hidden="true"></canvas>
@@ -132,7 +135,7 @@
     </section>
 
   <section class="panel section" data-panel="recent" aria-label="최근 2시간의 점수">
-      <div class="panel-move"><strong>최근 2시간 차트</strong><div class="btns"><button class="secondary" data-move="up" aria-label="최근 2시간 차트 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="최근 2시간 차트 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="최근 2시간 차트 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="최근 2시간 차트 오른쪽으로 이동">→ 오른쪽</button></div></div>
+      <div class="panel-move"><strong>최근 2시간 차트</strong><div class="btns"><button class="secondary" data-move="up" aria-label="최근 2시간 차트 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="최근 2시간 차트 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="최근 2시간 차트 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="최근 2시간 차트 오른쪽으로 이동">→ 오른쪽</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="최근 2시간 차트 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
     <div class="chart-header">
       <h2>최근 2시간 · 15분별 점수</h2>
       <div class="chart-total" id="recentTotal">구간 합계 0점</div>
@@ -145,7 +148,7 @@
   </section>
 
   <section class="panel section" data-panel="daily" aria-label="오늘의 시간대별 점수">
-      <div class="panel-move"><strong>24시간 차트</strong><div class="btns"><button class="secondary" data-move="up" aria-label="24시간 차트 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="24시간 차트 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="24시간 차트 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="24시간 차트 오른쪽으로 이동">→ 오른쪽</button></div></div>
+      <div class="panel-move"><strong>24시간 차트</strong><div class="btns"><button class="secondary" data-move="up" aria-label="24시간 차트 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="24시간 차트 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="24시간 차트 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="24시간 차트 오른쪽으로 이동">→ 오른쪽</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="24시간 차트 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
     <div class="chart-header">
       <h2>오늘의 시간대별 누적 점수</h2>
       <div class="chart-total" id="dailyTotal">오늘 합계 0점</div>
@@ -160,7 +163,7 @@
   </section>
 
     <section class="panel controls" data-panel="cameraControls" aria-label="카메라 제어">
-      <div class="panel-move"><strong>카메라 제어</strong><div class="btns"><button class="secondary" data-move="up" aria-label="카메라 제어 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="카메라 제어 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="카메라 제어 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="카메라 제어 오른쪽으로 이동">→ 오른쪽</button></div></div>
+      <div class="panel-move"><strong>카메라 제어</strong><div class="btns"><button class="secondary" data-move="up" aria-label="카메라 제어 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="카메라 제어 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="카메라 제어 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="카메라 제어 오른쪽으로 이동">→ 오른쪽</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="카메라 제어 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
       <div>
         <h2>카메라 제어</h2>
         <div class="btns">
@@ -186,7 +189,7 @@
       </div>
     </section>
     <section class="panel controls" data-panel="sound" aria-label="소리">
-      <div class="panel-move"><strong>소리</strong><div class="btns"><button class="secondary" data-move="up" aria-label="소리 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="소리 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="소리 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="소리 오른쪽으로 이동">→ 오른쪽</button></div></div>
+      <div class="panel-move"><strong>소리</strong><div class="btns"><button class="secondary" data-move="up" aria-label="소리 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="소리 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="소리 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="소리 오른쪽으로 이동">→ 오른쪽</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="소리 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
       <div>
         <h2>소리</h2>
         <label class="label" for="soundPreset">정면 감지 사운드</label>
@@ -218,7 +221,7 @@
       </div>
     </section>
     <section class="panel controls" data-panel="stats" aria-label="실시간 누적 통계">
-      <div class="panel-move"><strong>실시간 누적 통계</strong><div class="btns"><button class="secondary" data-move="up" aria-label="실시간 누적 통계 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="실시간 누적 통계 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="실시간 누적 통계 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="실시간 누적 통계 오른쪽으로 이동">→ 오른쪽</button></div></div>
+      <div class="panel-move"><strong>실시간 누적 통계</strong><div class="btns"><button class="secondary" data-move="up" aria-label="실시간 누적 통계 위로 이동">↑ 위로</button><button class="secondary" data-move="down" aria-label="실시간 누적 통계 아래로 이동">↓ 아래로</button><button class="secondary" data-move="left" aria-label="실시간 누적 통계 왼쪽으로 이동">← 왼쪽</button><button class="secondary" data-move="right" aria-label="실시간 누적 통계 오른쪽으로 이동">→ 오른쪽</button></div><label class="panel-size">가로 크기<select data-panel-width aria-label="실시간 누적 통계 가로 크기"><option value="default">기본 너비 · 한 칸</option><option value="full">전체 너비 · 두 칸</option></select></label></div>
       <div>
         <h2>실시간 누적 통계</h2>
         <div class="metrics" style="margin-top:9px">
@@ -945,13 +948,33 @@
   const panelLayout=$('panelLayout');
   const panels=Array.from(panelLayout.children);
   const panelWidthQuery=window.matchMedia('(min-width:700px)');
-  function panelMoveTarget(index,direction,count) {
+  function panelGridSlots() {
     const columns=panelWidthQuery.matches ? 2 : 1;
-    if (direction==='left' && (columns===1 || index%columns===0)) return -1;
-    if (direction==='right' && (columns===1 || index%columns===columns-1)) return -1;
-    const step={up:-columns,down:columns,left:-1,right:1}[direction];
-    const target=index+step;
-    return target>=0 && target<count ? target : -1;
+    let row=0,column=0;
+    return Array.from(panelLayout.children,panel=>{
+      const span=columns===2 && panel.dataset.width==='full' ? 2 : 1;
+      if (column+span>columns) {row++;column=0;}
+      const slot={row,column,span};
+      column+=span;
+      if (column===columns) {row++;column=0;}
+      return slot;
+    });
+  }
+  function panelMoveTarget(index,direction,count) {
+    const slots=panelGridSlots(), origin=slots[index];
+    let target=-1,best=Infinity;
+    slots.forEach((slot,i)=>{
+      if (i===index) return;
+      const overlaps=slot.column<origin.column+origin.span && slot.column+slot.span>origin.column;
+      let distance;
+      if (direction==='up' && slot.row<origin.row && overlaps || direction==='down' && slot.row>origin.row && overlaps) {
+        distance=Math.abs(slot.row-origin.row)*10+Math.abs(slot.column+slot.span/2-origin.column-origin.span/2);
+      } else if (direction==='left' && slot.row===origin.row && slot.column<origin.column || direction==='right' && slot.row===origin.row && slot.column>origin.column) {
+        distance=Math.abs(slot.column-origin.column);
+      } else return;
+      if (distance<best) {target=i;best=distance;}
+    });
+    return target;
   }
   function updatePanelMoveButtons() {
     const ordered=Array.from(panelLayout.children);
@@ -995,6 +1018,30 @@
       notify('박스 순서를 저장했습니다. 다음 접속에도 적용됩니다.');
     } catch(err) {notify('박스 순서 저장에 실패했습니다. 이번 접속에서만 적용됩니다.');}
   })));
+  const panelSizesStorageKey='focus-camera-test.panel-sizes.v1';
+  function restorePanelSizes() {
+    try {
+      const saved=JSON.parse(window.localStorage.getItem(panelSizesStorageKey));
+      panels.forEach(panel=>{
+        const width=saved?.[panel.dataset.panel];
+        if (width==='default' || width==='full') {
+          panel.dataset.width=width;
+          panel.querySelector('[data-panel-width]').value=width;
+        }
+      });
+    } catch(err) { /* Keep responsive default widths. */ }
+    updatePanelMoveButtons();
+  }
+  panels.forEach(panel=>panel.querySelector('[data-panel-width]').addEventListener('change',event=>{
+    panel.dataset.width=event.target.value==='full' ? 'full' : 'default';
+    updatePanelMoveButtons();
+    renderHourlyChart();renderRecentChart();
+    try {
+      window.localStorage.setItem(panelSizesStorageKey,JSON.stringify(Object.fromEntries(panels.map(p=>[p.dataset.panel,p.dataset.width || 'default']))));
+      notify('박스 가로 크기를 저장했습니다. 다음 접속에도 적용됩니다.');
+    } catch(err) {notify('박스 가로 크기 저장에 실패했습니다. 이번 접속에서만 적용됩니다.');}
+  }));
+  restorePanelSizes();
   restorePanelOrder();
   restoreCalibrations();
   updateCalibrationSummary();
