@@ -195,7 +195,7 @@
           <option value="5000">5초마다</option>
           <option value="10000">10초마다</option>
         </select>
-        <p class="hint">선택한 확인 간격 내 모든 얼굴 분석에서 정면이 유지되어야 몰입으로 판정합니다. 고개를 돌리거나 얼굴이 사라지거나 분석이 끊기면 해당 구간은 제외합니다.</p>
+        <p class="hint">선택한 확인 간격 내 모든 얼굴 분석에서 정면 또는 턱을 약간 든 자세가 유지되어야 몰입으로 판정합니다. 고개를 돌리거나 얼굴이 사라지거나 분석이 끊기면 해당 구간은 제외합니다.</p>
       </div>
     </section>
     <section class="panel controls" data-panel="sound" aria-label="소리">
@@ -348,20 +348,25 @@
       const yawDelta = Math.abs(pose.yaw - target.yaw);
       const rollDelta = Math.abs(pose.roll - target.roll);
       const pitchDelta = Math.abs(pose.pitch - target.pitch);
-      const pitchOK = baselines.length ? pitchDelta <= 0.115 : (pose.pitch > 0.24 && pose.pitch < 0.70);
-      return { index, yawDelta, rollDelta, front:yawDelta <= 0.16 && rollDelta <= 13 && pitchOK,
+      const normalPitchOK=baselines.length ? pitchDelta<=0.115 : (pose.pitch>0.24 && pose.pitch<0.70);
+      // A smaller nose-to-eye / chin-to-eye ratio represents the raised-chin allowance.
+      const chinRaised=baselines.length ?
+        (pose.pitch>=0.12 && pose.pitch<target.pitch-0.115 && pose.pitch>=target.pitch-0.23) :
+        (pose.pitch>=0.12 && pose.pitch<=0.24);
+      const pitchOK=normalPitchOK || chinRaised;
+      return { index, yawDelta, rollDelta, chinRaised, front:yawDelta <= 0.16 && rollDelta <= 13 && pitchOK,
         deviation:Math.max(yawDelta / 0.16, rollDelta / 13, pitchDelta / 0.115) };
     });
     const nearest = candidates.reduce((best, item) => item.deviation < best.deviation ? item : best);
     const match = candidates.find(item => item.front);
-    return {front:Boolean(match), referenceIndex:(match || nearest).index,
+    return {front:Boolean(match), chinRaised:Boolean(match?.chinRaised), referenceIndex:(match || nearest).index,
       yawDelta:(match || nearest).yawDelta, rollDelta:(match || nearest).rollDelta};
   }
 
   function updateCalibrationSummary() {
     calibrateBtn.textContent=`정면 기준 추가(${baselines.length})`;
     $('calibrationSummary').textContent = `등록된 정면 기준: ${baselines.length}개` +
-      (baselines.length ? ' · 등록 기준 중 하나와 일치하면 정면' : ' · 기본 기준 사용 중') +
+      (baselines.length ? ' · 등록 기준 또는 턱을 약간 든 자세 인정' : ' · 기본 정면·턱을 약간 든 자세 인정') +
       (calibrationStorageStatus ? ` · ${calibrationStorageStatus}` : '');
     $('resetCalibrationBtn').disabled = baselines.length === 0;
   }
@@ -665,7 +670,7 @@
       observed += 1;
       if (currentPose.front) frontObserved += 1;
       recentFrames.push({t:now,front:currentPose.front,face:true});
-      setState(currentPose.front ? '정면을 바라봅니다' : '고개 방향이 다릅니다',
+      setState(currentPose.front ? (currentPose.chinRaised ? '턱을 든 자세 · 몰입 인정' : '정면을 바라봅니다') : '고개 방향이 다릅니다',
         currentPose.front ? 'front' : 'away',
         `${baselines.length ? `기준 ${currentPose.referenceIndex+1}` : '기본 기준'} · 방향 편차 ${Math.round(currentPose.yawDelta*100)} · 기울기 ${Math.round(currentPose.rollDelta)}°`);
       drawFace(landmarks,currentPose.front);
