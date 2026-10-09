@@ -21,6 +21,10 @@
     video,canvas { position:absolute; width:100%; height:100%; inset:0; object-fit:cover; transform:scaleX(-1); }
     video { background:#090f1e; }
     canvas { pointer-events:none; }
+    .cam.blur-on video { filter:blur(14px); }
+    #personOverlay[hidden] { display:none; }
+    .blur-control { display:flex; gap:10px; align-items:center; margin-top:14px; font-size:14px; }
+    .blur-control input { width:20px; height:20px; accent-color:var(--mint); }
     .placeholder { position:absolute; inset:0; display:grid; place-items:center; z-index:2; text-align:center; background:radial-gradient(circle at center,#193249,#080d19 70%); padding:22px; }
     .placeholder.hidden { display:none; }
     .face-icon { width:80px; height:80px; border:2px dashed #6a859d; border-radius:38%; margin:0 auto 16px; display:grid; place-items:center; font-size:33px; }
@@ -61,8 +65,8 @@
     .chart-header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
     .chart-header h2 { margin:0; }
     .chart-total { color:var(--mint); font-size:14px; font-weight:800; }
-    .chart-scroll { overflow-x:auto; margin-top:14px; }
-    #hourlyChart { display:block; width:100%; min-width:720px; height:auto; }
+    .chart-scroll { width:100%; min-width:0; margin-top:14px; }
+    #hourlyChart { display:block; width:100%; min-width:0; height:auto; }
     h2 { font-size:16px; margin:0 0 10px; }
     ol { margin:0; padding-left:23px; color:#c4d0df; font-size:13px; line-height:1.9; }
     .note { color:var(--sub); font-size:12px; line-height:1.7; margin-top:12px; }
@@ -89,6 +93,7 @@
     <section class="panel" aria-label="전면 카메라">
       <div class="cam">
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
+        <canvas id="personOverlay" hidden aria-hidden="true"></canvas>
         <canvas id="overlay" aria-hidden="true"></canvas>
         <div class="placeholder" id="placeholder">
           <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>페이지를 열면 자동으로 카메라를 시작합니다.<br>셀카 카메라 사용을 허용하세요.</p></div>
@@ -104,6 +109,8 @@
           <div class="state" id="faceState">대기</div>
         </div>
         <div class="hint" id="poseText" style="margin-top:10px">정면 기준은 얼굴의 방향이며, 실제 눈동자 시선이나 몰입 상태는 측정하지 않습니다.</div>
+        <label class="blur-control"><input id="backgroundBlur" type="checkbox">배경 흐림 On/Off</label>
+        <div class="hint" id="blurStatus" role="status" style="margin-top:8px">배경 흐림 Off</div>
       </div>
     </section>
 
@@ -214,6 +221,15 @@
   const stopBtn = $('stopBtn');
   const calibrateBtn = $('calibrateBtn');
   const intervalSelect = $('interval');
+  const personCanvas = $('personOverlay');
+  const personCtx = personCanvas.getContext('2d');
+  let segmenter = null;
+  let segmenterPromise = null;
+  let blurBusy = false;
+  let blurRun = 0;
+  let lastBlurAt = 0;
+  let blurVersion = 0;
+  let pendingBlurVersion = 0;
 
   let mediaStream = null;
   let faceMesh = null;
@@ -344,7 +360,8 @@
         $('soundVolume').value = String(saved.soundVolume);
       }
       if ([2000,3000,5000,10000].includes(saved.interval)) intervalSelect.value = String(saved.interval);
-      $('settingsSummary').textContent = '저장된 소리·음량·확인 간격을 복원했습니다.';
+      if (typeof saved.backgroundBlur==='boolean') $('backgroundBlur').checked=saved.backgroundBlur;
+      $('settingsSummary').textContent = '저장된 소리·음량·확인 간격·배경 흐림을 복원했습니다.';
     } catch (err) {
       $('settingsSummary').textContent = '저장 설정을 불러오지 못해 기본 설정을 사용합니다.';
     }
@@ -353,8 +370,9 @@
   function persistSettings() {
     try {
       window.localStorage.setItem(settingsStorageKey, JSON.stringify({version:1,
-        soundPreset:$('soundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value)}));
-      $('settingsSummary').textContent = '소리·음량·확인 간격을 저장했습니다. 다음 접속에도 적용됩니다.';
+        soundPreset:$('soundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value),
+        backgroundBlur:$('backgroundBlur').checked}));
+      $('settingsSummary').textContent = '소리·음량·확인 간격·배경 흐림을 저장했습니다. 다음 접속에도 적용됩니다.';
     } catch (err) {
       $('settingsSummary').textContent = '설정 저장에 실패했습니다. 이번 접속에서만 적용됩니다.';
     }
@@ -397,18 +415,23 @@
     const total=hours.reduce((sum,value)=>sum+value,0);
     $('dailyTotal').textContent=`오늘 합계 ${total}점`;
     $('chartDate').textContent=`${hourlyScores.date} · 0–23시 · 현재 ${String(new Date().getHours()).padStart(2,'0')}시`;
-    const left=42, top=28, bottom=188, plotHeight=bottom-top, slot=31;
+    const width=Math.max(180,$('hourlyChart').parentElement.clientWidth || 480);
+    $('hourlyChart').setAttribute('viewBox',`0 0 ${width} 230`);
+    const left=36, right=10, top=28, bottom=188, plotHeight=bottom-top, slot=(width-left-right)/24;
+    const labelStep=width<480 ? 3 : (width<720 ? 2 : 1);
+    const barWidth=Math.max(2,slot*.68);
     const maximum=Math.max(4,Math.ceil(Math.max(...hours)/4)*4);
     let svg='';
     for (let tick=0;tick<=4;tick++) {
       const value=maximum*tick/4, y=bottom-plotHeight*tick/4;
-      svg+=`<line x1="${left}" y1="${y}" x2="${left+24*slot}" y2="${y}" stroke="#27354c"/><text x="${left-8}" y="${y+4}" text-anchor="end" fill="#a3b1c9" font-size="11">${value}</text>`;
+      svg+=`<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}" stroke="#27354c"/><text x="${left-8}" y="${y+4}" text-anchor="end" fill="#a3b1c9" font-size="11">${value}</text>`;
     }
     hours.forEach((value,hour)=>{
-      const height=value/maximum*plotHeight, x=left+hour*slot+5;
-      svg+=`<g><title>${hour}시: ${value}점</title><rect x="${x}" y="${bottom-height}" width="21" height="${height}" rx="3" fill="#56e1ae"/>`;
-      if (value) svg+=`<text x="${x+10.5}" y="${bottom-height-6}" text-anchor="middle" fill="#edf4ff" font-size="10">${value}</text>`;
-      svg+=`<text x="${x+10.5}" y="${bottom+20}" text-anchor="middle" fill="#a3b1c9" font-size="11">${hour}</text></g>`;
+      const height=value/maximum*plotHeight, center=left+(hour+.5)*slot, x=center-barWidth/2;
+      svg+=`<g><title>${hour}시: ${value}점</title><rect x="${x}" y="${bottom-height}" width="${barWidth}" height="${height}" rx="2" fill="#56e1ae"/>`;
+      if (value && slot>=22) svg+=`<text x="${center}" y="${bottom-height-6}" text-anchor="middle" fill="#edf4ff" font-size="10">${value}</text>`;
+      if (hour%labelStep===0 || hour===23) svg+=`<text x="${center}" y="${bottom+20}" text-anchor="middle" fill="#a3b1c9" font-size="10">${hour}</text>`;
+      svg+='</g>';
     });
     $('hourlyChart').innerHTML=svg;
     $('hourlyChart').setAttribute('aria-label',`오늘 시간대별 누적 점수. 합계 ${total}점. `+hours.map((value,hour)=>`${hour}시 ${value}점`).join(', '));
@@ -436,6 +459,67 @@
   function refreshHourlyChart() {
     restoreHourlyScores();
     renderHourlyChart();
+  }
+
+  function clearPersonOverlay() {
+    personCtx.clearRect(0,0,personCanvas.width,personCanvas.height);
+    personCanvas.hidden=true;
+  }
+  function onSegmentationResults(results) {
+    if (!running || !$('backgroundBlur').checked || blurRun!==runId || pendingBlurVersion!==blurVersion) return;
+    const width=video.videoWidth || 640, height=video.videoHeight || 480;
+    if (personCanvas.width!==width || personCanvas.height!==height) {personCanvas.width=width;personCanvas.height=height;}
+    personCtx.save();
+    personCtx.clearRect(0,0,width,height);
+    personCtx.drawImage(results.segmentationMask,0,0,width,height);
+    personCtx.globalCompositeOperation='source-in';
+    personCtx.drawImage(results.image,0,0,width,height);
+    personCtx.restore();
+    personCanvas.hidden=false;
+    $('blurStatus').textContent='배경 흐림 On · 사람은 선명하게 표시합니다.';
+  }
+  async function ensureSegmenter() {
+    if (segmenter) return segmenter;
+    if (!segmenterPromise) segmenterPromise=(async()=>{
+      if (typeof SelfieSegmentation!=='function') {
+        await new Promise((resolve,reject)=>{
+          const script=document.createElement('script');
+          script.src='https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/selfie_segmentation.js';
+          script.crossOrigin='anonymous';
+          script.onload=resolve;
+          script.onerror=()=>{script.remove();reject(new Error('배경 분리 모델을 불러오지 못했습니다.'));};
+          document.head.appendChild(script);
+        });
+      }
+      const model=new SelfieSegmentation({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation@0.1.1675465747/${file}`});
+      model.setOptions({modelSelection:1});
+      model.onResults(onSegmentationResults);
+      await model.initialize();
+      segmenter=model;
+      return model;
+    })().catch(err=>{segmenterPromise=null;throw err;});
+    return segmenterPromise;
+  }
+  function applyBackgroundBlur() {
+    blurVersion+=1;
+    video.parentElement.classList.toggle('blur-on',$('backgroundBlur').checked);
+    clearPersonOverlay();
+    if (!$('backgroundBlur').checked) {$('blurStatus').textContent='배경 흐림 Off';return;}
+    if (!running) {$('blurStatus').textContent='배경 흐림 On · 카메라 시작 시 적용합니다.';return;}
+    $('blurStatus').textContent='배경 흐림 On · 사람 영역을 준비 중입니다.';
+    ensureSegmenter().catch(()=>{
+      if ($('backgroundBlur').checked) $('blurStatus').textContent='사람 영역을 불러오지 못해 전체 화면을 흐리게 표시합니다. Off 후 On으로 다시 시도해 주세요.';
+    });
+  }
+  function updateBackgroundBlur(now,myRun) {
+    if (!$('backgroundBlur').checked || !segmenter || blurBusy || video.readyState<2 || now-lastBlurAt<250) return;
+    lastBlurAt=now;blurBusy=true;blurRun=myRun;pendingBlurVersion=blurVersion;
+    segmenter.send({image:video}).catch(()=>{
+      if (running && myRun===runId && $('backgroundBlur').checked) {
+        clearPersonOverlay();
+        $('blurStatus').textContent='배경 분리 오류로 전체 화면을 흐리게 표시합니다.';
+      }
+    }).finally(()=>{blurBusy=false;});
   }
 
   function drawFace(p, isFront) {
@@ -652,6 +736,7 @@
   async function detectLoop(myRun) {
     if (!running || myRun!==runId) return;
     const now=performance.now();
+    updateBackgroundBlur(now,myRun);
     if (!busy && video.readyState>=2 && now-lastFrameAt>=detectionEveryMs) {
       lastFrameAt=now;
       busy=true;
@@ -688,6 +773,7 @@
       $('livePill').classList.add('on');$('livePill').textContent='전면 카메라 실행 중';
       startBtn.disabled=true; stopBtn.disabled=false;calibrateBtn.disabled=false;
       running=true; runId+=1; startedAt=performance.now();
+      applyBackgroundBlur();
       updateCalibrationSummary();
       setState('얼굴 분석 시작', '', '폰을 고정하고 작업 자세에서 ‘정면 기준 추가’를 눌러 보세요.');
       restartCheckTimer();
@@ -705,6 +791,7 @@
   function stop() {
     stopSounds();
     running=false;runId+=1;
+    clearPersonOverlay();
     cancelAnimationFrame(frameRequest);
     clearInterval(checkTimer);clearInterval(uiTimer);
     if (mediaStream) mediaStream.getTracks().forEach(track=>track.stop());
@@ -753,6 +840,7 @@
     updateAudioStatus();
   });
   intervalSelect.addEventListener('change',()=>{persistSettings();restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
+  $('backgroundBlur').addEventListener('change',()=>{persistSettings();applyBackgroundBlur();});
   document.addEventListener('visibilitychange',()=>{
     if (!document.hidden) refreshHourlyChart();
     if (document.hidden) stopSounds();
@@ -764,9 +852,11 @@
   restoreCalibrations();
   updateCalibrationSummary();
   restoreSettings();
+  applyBackgroundBlur();
   updateSoundSelection();
   $('volumeLabel').textContent=`${$('soundVolume').value}%`;
   refreshHourlyChart();
+  if (typeof ResizeObserver==='function') new ResizeObserver(renderHourlyChart).observe($('hourlyChart').parentElement);
   setInterval(refreshHourlyChart,30000);
   window.addEventListener('storage',event=>{if(event.key===hourlyStorageKey || event.key===null) refreshHourlyChart();});
   start({automatic:true});
