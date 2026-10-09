@@ -76,11 +76,13 @@
     .sound-grid button[aria-pressed="true"] { outline:2px solid var(--mint); background:#154c3e; }
     input[type="range"] { width:100%; margin-top:12px; accent-color:var(--mint); }
     @media(max-width:700px){ .layout{grid-template-columns:1fr;} .cam{max-height:none;aspect-ratio:4/4.3;} .controls{padding:16px;} }
+    #checkFlash { position:fixed; inset:0; z-index:9999; background:#fff; opacity:0; pointer-events:none; }
   </style>
   <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
 </head>
 <body>
+<div id="checkFlash" aria-hidden="true"></div>
 <main>
   <header>
     <div class="eyebrow">FOCUS ASSISTANT · CAMERA</div>
@@ -110,6 +112,7 @@
         </div>
         <div class="hint" id="poseText" style="margin-top:10px">정면 기준은 얼굴의 방향이며, 실제 눈동자 시선이나 몰입 상태는 측정하지 않습니다.</div>
         <label class="blur-control"><input id="backgroundBlur" type="checkbox">배경 흐림 On/Off</label>
+        <label class="blur-control"><input id="flashOnCheck" type="checkbox">체크 시 전체 화면 번쩍임 On/Off</label>
         <div class="hint" id="blurStatus" role="status" style="margin-top:8px">배경 흐림 Off</div>
       </div>
     </section>
@@ -153,7 +156,7 @@
       </div>
       <p class="hint" id="calibrationSummary" role="status">등록된 정면 기준: 0개 · 기본 기준 사용 중</p>
       <p class="hint">작업할 때의 자세마다 ‘정면 기준 추가’를 눌러 주세요. 등록한 기준 중 하나와 일치하면 정면으로 판정합니다. 기준은 이 기기·브라우저에 저장하여 새로고침하거나 다시 접속해도 재사용합니다. ‘기준 초기화’를 누르면 저장된 기준도 삭제합니다. 카메라 위치를 바꾸면 초기화 후 다시 등록하세요.</p>
-      <p class="hint" id="settingsSummary" role="status">소리·음량·확인 간격은 이 브라우저에 자동 저장됩니다.</p>
+      <p class="hint" id="settingsSummary" role="status">소리·음량·확인 간격·배경 흐림·화면 번쩍임은 이 브라우저에 자동 저장됩니다.</p>
       <div>
         <h2>어떤 소리가 기분 좋은가요?</h2>
         <label class="label" for="soundPreset">정면 감지 사운드</label>
@@ -361,7 +364,8 @@
       }
       if ([2000,3000,5000,10000].includes(saved.interval)) intervalSelect.value = String(saved.interval);
       if (typeof saved.backgroundBlur==='boolean') $('backgroundBlur').checked=saved.backgroundBlur;
-      $('settingsSummary').textContent = '저장된 소리·음량·확인 간격·배경 흐림을 복원했습니다.';
+      if (typeof saved.flashOnCheck==='boolean') $('flashOnCheck').checked=saved.flashOnCheck;
+      $('settingsSummary').textContent = '저장된 소리·음량·확인 간격·배경 흐림·화면 번쩍임을 복원했습니다.';
     } catch (err) {
       $('settingsSummary').textContent = '저장 설정을 불러오지 못해 기본 설정을 사용합니다.';
     }
@@ -371,8 +375,8 @@
     try {
       window.localStorage.setItem(settingsStorageKey, JSON.stringify({version:1,
         soundPreset:$('soundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value),
-        backgroundBlur:$('backgroundBlur').checked}));
-      $('settingsSummary').textContent = '소리·음량·확인 간격·배경 흐림을 저장했습니다. 다음 접속에도 적용됩니다.';
+        backgroundBlur:$('backgroundBlur').checked, flashOnCheck:$('flashOnCheck').checked}));
+      $('settingsSummary').textContent = '소리·음량·확인 간격·배경 흐림·화면 번쩍임을 저장했습니다. 다음 접속에도 적용됩니다.';
     } catch (err) {
       $('settingsSummary').textContent = '설정 저장에 실패했습니다. 이번 접속에서만 적용됩니다.';
     }
@@ -736,10 +740,18 @@
     } catch(err) {notify(`소리 재생 실패: ${err.message}`);}
   }
 
+  let checkFlashAnimation = null;
+  function flashCheck() {
+    if (!$('flashOnCheck').checked) return;
+    checkFlashAnimation?.cancel();
+    checkFlashAnimation=$('checkFlash').animate([{opacity:0},{opacity:.28,offset:.15},{opacity:0}],{duration:180,easing:'ease-out'});
+  }
+
   function checkFront(intervalSeconds=Number(intervalSelect.value)/1000) {
     if (!running) return;
     checkCount+=1;
     $('checkCount').textContent=String(checkCount);
+    flashCheck();
     const now=performance.now();
     const nearby=recentFrames.filter(f => now-f.t<1300);
     const faces=nearby.filter(f=>f.face);
@@ -883,6 +895,7 @@
   });
   intervalSelect.addEventListener('change',()=>{persistSettings();restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
   $('backgroundBlur').addEventListener('change',()=>{persistSettings();applyBackgroundBlur();});
+  $('flashOnCheck').addEventListener('change',()=>{persistSettings();if (!$('flashOnCheck').checked) checkFlashAnimation?.cancel();});
   document.addEventListener('visibilitychange',()=>{
     if (!document.hidden) refreshHourlyChart();
     if (document.hidden) stopSounds();
