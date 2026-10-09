@@ -82,7 +82,7 @@
         <video id="video" autoplay muted playsinline webkit-playsinline></video>
         <canvas id="overlay" aria-hidden="true"></canvas>
         <div class="placeholder" id="placeholder">
-          <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>시작 버튼을 누르고<br>셀카 카메라 사용을 허용하세요.</p></div>
+          <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>페이지를 열면 자동으로 카메라를 시작합니다.<br>셀카 카메라 사용을 허용하세요.</p></div>
         </div>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
         <div class="score-pill" aria-label="정면 감지 점수">점수<strong id="score">0</strong></div>
@@ -159,7 +159,7 @@
         <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
         <p class="hint">* 영상에서 얼굴이 감지된 시점 중 정면이라고 판정한 비율입니다. 과학적으로 검증된 몰입 점수가 아닙니다.</p>
       </div>
-      <div id="message" class="message" role="status" aria-live="polite">시작 버튼을 누르면 카메라 및 소리 기능을 준비합니다.</div>
+      <div id="message" class="message" role="status" aria-live="polite">카메라를 자동으로 시작합니다. 카메라 권한을 허용해 주세요.</div>
     </section>
   </div>
 
@@ -167,7 +167,8 @@
     <h2>사용 방법</h2>
     <ol>
       <li>아이폰 Safari에서 <span class="tag">HTTPS 주소</span>로 접속합니다. (맥에서는 <span class="tag">localhost</span>도 가능)</li>
-      <li><strong>카메라 시작</strong>을 누르고 전면 카메라 권한을 허용합니다.</li>
+      <li>페이지를 열면 카메라 시작을 자동으로 시도합니다. 전면 카메라 권한을 허용하세요. 자동 시작이 제한되면 <strong>카메라 시작</strong>을 누르세요.</li>
+      <li>자동 시작 후에는 <strong>선택한 소리 다시 듣기</strong>나 사운드 미리듣기 버튼을 한 번 눌러 소리를 활성화하세요.</li>
       <li>폰을 책상에 세워 놓고, 작업할 때의 자세에서 <strong>정면 기준 추가</strong>를 누릅니다. 다른 작업 자세도 같은 버튼으로 추가할 수 있습니다.</li>
       <li>원하는 사운드를 선택하고, 얼굴을 좌우로 돌렸다가 등록한 자세로 돌아오며 소리를 확인합니다.</li>
       <li>테스트를 마치면 <strong>정지</strong>를 눌러 카메라를 종료합니다.</li>
@@ -190,6 +191,7 @@
   let mediaStream = null;
   let faceMesh = null;
   let running = false;
+  let starting = false;
   let busy = false;
   let runId = 0;
   let frameRequest = 0;
@@ -521,13 +523,15 @@
     }
     if (running && myRun===runId) frameRequest=requestAnimationFrame(()=>detectLoop(myRun));
   }
-  async function start() {
-    if (running) return;
+  async function start({automatic=false}={}) {
+    if (running || starting) return;
+    starting=true;
     startBtn.disabled=true;
     notify('카메라 권한과 얼굴 분석 모델을 준비하고 있습니다…');
     try {
-      // The user-initiated click unlocks Web Audio on iOS Safari.
-      await unlockAudio();
+      // Automatic camera startup must not wait on audio requiring a user gesture.
+      // A real start or preview click unlocks Web Audio on iOS Safari.
+      if (!automatic) await unlockAudio();
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('카메라를 사용할 수 없습니다. iPhone에서는 HTTPS로 접속했는지 확인하세요.');
       mediaStream=await navigator.mediaDevices.getUserMedia({
         audio:false, video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:15,max:30}}
@@ -550,11 +554,14 @@
       setState('얼굴 분석 시작', '', '폰을 고정하고 작업 자세에서 ‘정면 기준 추가’를 눌러 보세요.');
       restartCheckTimer();
       uiTimer=setInterval(updateClock,250);
-      notify('테스트를 시작했습니다. 원하는 작업 자세를 정면 기준으로 추가해 주세요.');
+      notify(automatic ? '카메라를 자동으로 시작했습니다. 소리를 켜려면 사운드 미리듣기 버튼을 한 번 눌러 주세요.' :
+        '테스트를 시작했습니다. 원하는 작업 자세를 정면 기준으로 추가해 주세요.');
       detectLoop(runId);
     } catch(err) {
-      notify(`시작 실패: ${err.message}`);
+      notify(`${automatic ? '자동 시작 실패' : '시작 실패'}: ${err.message} ‘카메라 시작’을 눌러 다시 시도해 주세요.`);
       stop();
+    } finally {
+      starting=false;
     }
   }
   function stop() {
@@ -572,7 +579,7 @@
     $('nextCheck').textContent='—';currentPose=null;recentFrames=[];
     setState('측정 중지', '', '카메라가 종료되었습니다.');
   }
-  startBtn.addEventListener('click',start);
+  startBtn.addEventListener('click',()=>start());
   stopBtn.addEventListener('click',()=>{ stop();notify('테스트를 중지하고 카메라를 종료했습니다.'); });
   calibrateBtn.addEventListener('click',()=>{
     if (!running || !currentPose) {notify('먼저 카메라에 얼굴이 보이도록 해 주세요.');return;}
@@ -618,6 +625,7 @@
   restoreSettings();
   updateSoundSelection();
   $('volumeLabel').textContent=`${$('soundVolume').value}%`;
+  start({automatic:true});
 })();
 </script>
 </body>
