@@ -40,6 +40,7 @@
     button { border:0; cursor:pointer; border-radius:12px; padding:14px 17px; min-height:47px; font-weight:800; font-size:14px; font-family:inherit; }
     button.primary { flex:1; color:#082218; background:var(--mint); }
     button.secondary { color:#e8f1fd; background:#263751; }
+    .cam button.calibrate { position:absolute; left:13px; bottom:13px; z-index:3; color:#082218; background:var(--mint); box-shadow:0 2px 12px #0006; }
     button:disabled { cursor:not-allowed; opacity:.45; }
     .label { font-size:13px; color:#c3d0df; font-weight:700; }
     select { width:100%; background:#10192a; border:1px solid #40516c; color:white; padding:13px; border-radius:11px; font-size:15px; margin-top:8px; }
@@ -82,6 +83,7 @@
           <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>시작 버튼을 누르고<br>셀카 카메라 사용을 허용하세요.</p></div>
         </div>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
+        <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
       </div>
       <div class="camera-bottom">
         <div class="status">
@@ -101,11 +103,11 @@
         </div>
       </div>
       <div class="btns">
-        <button id="calibrateBtn" class="secondary" disabled>◎ 정면 기준 추가</button>
         <button id="resetCalibrationBtn" class="secondary" disabled>기준 초기화</button>
       </div>
       <p class="hint" id="calibrationSummary" role="status">등록된 정면 기준: 0개 · 기본 기준 사용 중</p>
       <p class="hint">작업할 때의 자세마다 ‘정면 기준 추가’를 눌러 주세요. 등록한 기준 중 하나와 일치하면 정면으로 판정합니다. 기준은 이 기기·브라우저에 저장하여 새로고침하거나 다시 접속해도 재사용합니다. ‘기준 초기화’를 누르면 저장된 기준도 삭제합니다. 카메라 위치를 바꾸면 초기화 후 다시 등록하세요.</p>
+      <p class="hint" id="settingsSummary" role="status">소리·음량·확인 간격은 이 브라우저에 자동 저장됩니다.</p>
       <div>
         <h2>어떤 소리가 기분 좋은가요?</h2>
         <label class="label" for="soundPreset">정면 감지 사운드</label>
@@ -199,6 +201,7 @@
   let currentPose = null;
   let baselines = [];
   const calibrationStorageKey = 'focus-camera-test.calibration.v1';
+  const settingsStorageKey = 'focus-camera-test.settings.v1';
   let calibrationStorageStatus = '';
   let recentFrames = [];
   let audioCtx = null;
@@ -287,6 +290,35 @@
     } catch (err) {
       calibrationStorageStatus = baselines.length ? '저장 실패 · 이번 접속에서만 사용' : '저장 기준 삭제 실패';
       return false;
+    }
+  }
+
+  function restoreSettings() {
+    try {
+      const raw = window.localStorage.getItem(settingsStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved || saved.version !== 1) throw new Error('Invalid settings data');
+      if (['tick','rain','waves','wind','chime','pad'].includes(saved.soundPreset)) {
+        $('soundPreset').value = saved.soundPreset;
+      }
+      if (Number.isFinite(saved.soundVolume) && saved.soundVolume >= 0 && saved.soundVolume <= 100 && saved.soundVolume % 5 === 0) {
+        $('soundVolume').value = String(saved.soundVolume);
+      }
+      if ([2000,3000,5000,10000].includes(saved.interval)) intervalSelect.value = String(saved.interval);
+      $('settingsSummary').textContent = '저장된 소리·음량·확인 간격을 복원했습니다.';
+    } catch (err) {
+      $('settingsSummary').textContent = '저장 설정을 불러오지 못해 기본 설정을 사용합니다.';
+    }
+  }
+
+  function persistSettings() {
+    try {
+      window.localStorage.setItem(settingsStorageKey, JSON.stringify({version:1,
+        soundPreset:$('soundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value)}));
+      $('settingsSummary').textContent = '소리·음량·확인 간격을 저장했습니다. 다음 접속에도 적용됩니다.';
+    } catch (err) {
+      $('settingsSummary').textContent = '설정 저장에 실패했습니다. 이번 접속에서만 적용됩니다.';
     }
   }
 
@@ -555,17 +587,19 @@
   });
   $('soundBtn').addEventListener('click',previewSound);
   $('soundStopBtn').addEventListener('click',()=>{stopSounds();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
-  $('soundPreset').addEventListener('change',()=>{stopSounds();updateSoundSelection();notify(`${selectedSoundLabel()}을 정면 감지 사운드로 선택했습니다.`);});
+  $('soundPreset').addEventListener('change',()=>{stopSounds();updateSoundSelection();persistSettings();notify(`${selectedSoundLabel()}을 정면 감지 사운드로 선택했습니다.`);});
   document.querySelectorAll('[data-sound]').forEach(button=>button.addEventListener('click',()=>{
     $('soundPreset').value=button.dataset.sound;
     updateSoundSelection();
+    persistSettings();
     previewSound();
   }));
   $('soundVolume').addEventListener('input',()=>{
     $('volumeLabel').textContent=`${$('soundVolume').value}%`;
+    persistSettings();
     if (audioBus) audioBus.gain.setTargetAtTime(Number($('soundVolume').value)/100,audioCtx.currentTime,.02);
   });
-  intervalSelect.addEventListener('change',()=>{restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
+  intervalSelect.addEventListener('change',()=>{persistSettings();restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
   document.addEventListener('visibilitychange',()=>{
     if (document.hidden) stopSounds();
     if (document.hidden && running) {
@@ -575,6 +609,9 @@
   window.addEventListener('pagehide',()=>{if(running)stop();});
   restoreCalibrations();
   updateCalibrationSummary();
+  restoreSettings();
+  updateSoundSelection();
+  $('volumeLabel').textContent=`${$('soundVolume').value}%`;
 })();
 </script>
 </body>
