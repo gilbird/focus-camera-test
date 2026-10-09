@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1224">
+  <title>정면 감지 · 딩동 테스트</title>
+  <style>
+    :root { color-scheme: dark; --bg:#080e1b; --card:#111c30; --line:#27354c; --txt:#edf4ff; --sub:#a3b1c9; --mint:#56e1ae; --amber:#ffcc78; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 10% -10%,#1c3752 0,transparent 42%),var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; -webkit-font-smoothing:antialiased; }
+    main { width:min(980px,100%); margin:0 auto; padding:clamp(16px,4vw,32px) clamp(14px,4vw,24px) 45px; }
+    header { margin:6px 0 22px; }
+    .eyebrow { font-size:12px; letter-spacing:2px; color:var(--mint); font-weight:800; }
+    h1 { margin:6px 0 8px; font-size:clamp(25px,5vw,39px); letter-spacing:-1.2px; }
+    .lead { margin:0; color:var(--sub); line-height:1.7; font-size:14px; }
+    .layout { display:grid; grid-template-columns:minmax(0, 1.2fr) minmax(270px,.8fr); gap:16px; }
+    .panel { background:rgba(17,28,48,.95); border:1px solid var(--line); border-radius:20px; overflow:hidden; }
+    .cam { aspect-ratio:4/5; max-height:540px; background:#070c17; position:relative; overflow:hidden; }
+    video,canvas { position:absolute; width:100%; height:100%; inset:0; object-fit:cover; transform:scaleX(-1); }
+    video { background:#090f1e; }
+    canvas { pointer-events:none; }
+    .placeholder { position:absolute; inset:0; display:grid; place-items:center; z-index:2; text-align:center; background:radial-gradient(circle at center,#193249,#080d19 70%); padding:22px; }
+    .placeholder.hidden { display:none; }
+    .face-icon { width:80px; height:80px; border:2px dashed #6a859d; border-radius:38%; margin:0 auto 16px; display:grid; place-items:center; font-size:33px; }
+    .placeholder strong { font-size:19px; }
+    .placeholder p { font-size:13px; line-height:1.6; color:var(--sub); }
+    .live-pill { position:absolute; top:13px; left:13px; z-index:3; font-size:12px; font-weight:800; padding:8px 11px; border-radius:999px; background:rgba(7,12,23,.80); border:1px solid #45536b; }
+    .live-pill::before { content:""; width:8px; height:8px; border-radius:50%; display:inline-block; background:#72819a; margin-right:7px; }
+    .live-pill.on::before { background:var(--mint); box-shadow:0 0 0 3px #56e1ae25; }
+    .camera-bottom { padding:17px 18px 20px; }
+    .status { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .status strong { font-size:20px; }
+    .status small { color:var(--sub); display:block; margin-bottom:3px; }
+    .state { border-radius:999px; padding:8px 12px; font-weight:800; font-size:13px; white-space:nowrap; background:#2d394b; }
+    .state.front { background:#154c3e; color:#94ffcb; }
+    .state.away { background:#513c25; color:#ffe0a3; }
+    .controls { display:grid; gap:12px; padding:18px; }
+    .btns { display:flex; gap:9px; flex-wrap:wrap; }
+    button { border:0; cursor:pointer; border-radius:12px; padding:14px 17px; min-height:47px; font-weight:800; font-size:14px; font-family:inherit; }
+    button.primary { flex:1; color:#082218; background:var(--mint); }
+    button.secondary { color:#e8f1fd; background:#263751; }
+    button:disabled { cursor:not-allowed; opacity:.45; }
+    .label { font-size:13px; color:#c3d0df; font-weight:700; }
+    select { width:100%; background:#10192a; border:1px solid #40516c; color:white; padding:13px; border-radius:11px; font-size:15px; margin-top:8px; }
+    .hint { font-size:12px; line-height:1.65; color:var(--sub); }
+    .metrics { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+    .metric { padding:13px; border:1px solid var(--line); border-radius:12px; background:#0c1525; }
+    .metric span { font-size:11px; color:var(--sub); }
+    .metric strong { display:block; font-variant-numeric:tabular-nums; font-size:24px; margin-top:6px; }
+    .meter { height:8px; background:#2b3a50; border-radius:50px; overflow:hidden; margin-top:7px; }
+    .meter > div { width:0; background:linear-gradient(90deg,#3ac7e2,#56e1ae); height:100%; transition:width .3s; }
+    .message { background:#0c1525; border:1px solid #34445d; padding:12px; border-radius:12px; color:#b9cde0; font-size:13px; min-height:48px; line-height:1.6; }
+    .section { margin-top:16px; padding:18px; }
+    h2 { font-size:16px; margin:0 0 10px; }
+    ol { margin:0; padding-left:23px; color:#c4d0df; font-size:13px; line-height:1.9; }
+    .note { color:var(--sub); font-size:12px; line-height:1.7; margin-top:12px; }
+    .tag { color:var(--mint); font-weight:800; }
+    @media(max-width:700px){ .layout{grid-template-columns:1fr;} .cam{max-height:none;aspect-ratio:4/4.3;} .controls{padding:16px;} }
+  </style>
+  <!-- Google's MediaPipe Face Mesh, loaded from CDN. Internet connection required. -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">FOCUS ASSISTANT · CAMERA TEST</div>
+    <h1>정면을 보면, 시계 틱톡 ⏱️</h1>
+    <p class="lead">아이폰 전면 카메라로 얼굴 방향을 확인하는 간단한 테스트입니다.<br>설정한 간격마다 정면 상태가 유지되면 두 음으로 알립니다.</p>
+  </header>
+
+  <div class="layout">
+    <section class="panel" aria-label="전면 카메라">
+      <div class="cam">
+        <video id="video" autoplay muted playsinline webkit-playsinline></video>
+        <canvas id="overlay" aria-hidden="true"></canvas>
+        <div class="placeholder" id="placeholder">
+          <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>시작 버튼을 누르고<br>셀카 카메라 사용을 허용하세요.</p></div>
+        </div>
+        <div class="live-pill" id="livePill">카메라 꺼짐</div>
+      </div>
+      <div class="camera-bottom">
+        <div class="status">
+          <div><small>실시간 얼굴 방향</small><strong id="faceLabel">측정 전</strong></div>
+          <div class="state" id="faceState">대기</div>
+        </div>
+        <div class="hint" id="poseText" style="margin-top:10px">정면 기준은 얼굴의 방향이며, 실제 눈동자 시선이나 몰입 상태는 측정하지 않습니다.</div>
+      </div>
+    </section>
+
+    <section class="panel controls" aria-label="테스트 설정">
+      <div>
+        <h2>테스트 제어</h2>
+        <div class="btns">
+          <button id="startBtn" class="primary">▶ 카메라 시작</button>
+          <button id="stopBtn" class="secondary" disabled>■ 정지</button>
+        </div>
+      </div>
+      <div class="btns">
+        <button id="calibrateBtn" class="secondary" disabled>◎ 정면 기준 보정</button>
+        <button id="soundBtn" class="secondary">♪ 시계 초침 소리 테스트</button>
+      </div>
+      <div>
+        <label class="label" for="interval">정면 확인 간격</label>
+        <select id="interval">
+          <option value="2000">2초마다</option>
+          <option value="3000" selected>3초마다</option>
+          <option value="5000">5초마다</option>
+          <option value="10000">10초마다</option>
+        </select>
+        <p class="hint">확인 순간 직전 약 1초간 정면 상태가 안정적으로 유지되어야 소리가 납니다. 고개를 돌리거나 얼굴이 사라지면 울리지 않습니다.</p>
+      </div>
+      <div>
+        <div class="label">실시간 누적 통계</div>
+        <div class="metrics" style="margin-top:9px">
+          <div class="metric"><span>테스트 경과</span><strong id="elapsed">00:00</strong></div>
+          <div class="metric"><span>초침 알림 횟수</span><strong id="bells">0</strong></div>
+          <div class="metric"><span>정면 관찰 비율*</span><strong id="frontRatio">—</strong></div>
+          <div class="metric"><span>다음 확인까지</span><strong id="nextCheck">—</strong></div>
+        </div>
+        <div class="meter" aria-hidden="true"><div id="meterFill"></div></div>
+        <p class="hint">* 영상에서 얼굴이 감지된 시점 중 정면이라고 판정한 비율입니다. 과학적으로 검증된 몰입 점수가 아닙니다.</p>
+      </div>
+      <div id="message" class="message" role="status" aria-live="polite">시작 버튼을 누르면 카메라 및 소리 기능을 준비합니다.</div>
+    </section>
+  </div>
+
+  <section class="panel section">
+    <h2>사용 방법</h2>
+    <ol>
+      <li>아이폰 Safari에서 <span class="tag">HTTPS 주소</span>로 접속합니다. (맥에서는 <span class="tag">localhost</span>도 가능)</li>
+      <li><strong>카메라 시작</strong>을 누르고 전면 카메라 권한을 허용합니다.</li>
+      <li>폰을 책상에 세워 놓고, 카메라를 정면으로 바라보며 <strong>정면 기준 보정</strong>을 누릅니다.</li>
+      <li>얼굴을 좌우로 돌렸다가 다시 정면을 보면서 시계 초침 소리를 확인합니다.</li>
+      <li>테스트를 마치면 <strong>정지</strong>를 눌러 카메라를 종료합니다.</li>
+    </ol>
+    <p class="note">브라우저 보안 정책으로 <strong>파일 앱에서 HTML을 직접 여는 방식(file://)</strong>은 카메라가 작동하지 않을 수 있습니다. HTTPS 웹사이트로 배포해 테스트하세요. 화면이 잠기거나 Safari가 백그라운드로 이동하면 카메라 분석이 중지될 수 있습니다. 영상은 기기에서 처리하며 서버로 업로드하지 않습니다. 단, 얼굴 인식 라이브러리는 처음 실행 시 CDN에서 내려받습니다.</p>
+  </section>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const video = $('video');
+  const canvas = $('overlay');
+  const ctx = canvas.getContext('2d');
+  const startBtn = $('startBtn');
+  const stopBtn = $('stopBtn');
+  const calibrateBtn = $('calibrateBtn');
+  const intervalSelect = $('interval');
+
+  let mediaStream = null;
+  let faceMesh = null;
+  let running = false;
+  let busy = false;
+  let runId = 0;
+  let frameRequest = 0;
+  let lastFrameAt = 0;
+  let checkTimer = 0;
+  let uiTimer = 0;
+  let startedAt = 0;
+  let nextCheckAt = 0;
+  let bellCount = 0;
+  let observed = 0;
+  let frontObserved = 0;
+  let currentPose = null;
+  let baseline = null;
+  let recentFrames = [];
+  let audioCtx = null;
+  const detectionEveryMs = 180;
+
+  function notify(message) { $('message').textContent = message; }
+  function setState(label, state, detail) {
+    $('faceLabel').textContent = label;
+    $('faceState').textContent = state === 'front' ? '정면 ✓' : (state === 'away' ? '비정면' : '대기');
+    $('faceState').className = 'state ' + (state === 'front' ? 'front' : (state === 'away' ? 'away' : ''));
+    if (detail) $('poseText').textContent = detail;
+  }
+  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  // These are 2D geometry heuristics, NOT scientifically validated gaze or attention measurements.
+  function estimatePose(p) {
+    const nose = p[1];
+    const leftCheek = p[234];
+    const rightCheek = p[454];
+    const e1 = p[33];
+    const e2 = p[263];
+    const chin = p[152];
+    const dl = distance(nose, leftCheek);
+    const dr = distance(nose, rightCheek);
+    const yaw = (dl - dr) / Math.max(0.001, dl + dr);
+    const roll = Math.atan2(e2.y - e1.y, e2.x - e1.x) * 180 / Math.PI;
+    const eyeY = (e1.y + e2.y) / 2;
+    const pitchProxy = (nose.y - eyeY) / Math.max(0.001, chin.y - eyeY);
+    const target = baseline || {yaw:0, roll:0, pitch:pitchProxy};
+    // Without calibration, tolerate broad pitch range because this proxy varies by face.
+    const pitchOK = baseline ? Math.abs(pitchProxy - target.pitch) <= 0.115 : (pitchProxy > 0.24 && pitchProxy < 0.70);
+    const front = Math.abs(yaw - target.yaw) <= 0.16 && Math.abs(roll - target.roll) <= 13 && pitchOK;
+    return { yaw, roll, pitch:pitchProxy, front };
+  }
+
+  function drawFace(p, isFront) {
+    const w = video.videoWidth || 640, h = video.videoHeight || 480;
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.clearRect(0, 0, w, h);
+    const points = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+    ctx.lineWidth = Math.max(2,w/300);
+    ctx.strokeStyle = isFront ? '#56e1ae' : '#ffcc78';
+    ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 9;
+    ctx.beginPath();
+    points.forEach((index, i) => { const x = p[index].x*w, y = p[index].y*h; if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+    ctx.closePath(); ctx.stroke(); ctx.shadowBlur = 0;
+    for (const index of [1,33,263,152]) {
+      const x = p[index].x*w, y=p[index].y*h;
+      ctx.beginPath(); ctx.arc(x,y,Math.max(3,w/150),0,2*Math.PI); ctx.fillStyle=ctx.strokeStyle; ctx.fill();
+    }
+  }
+
+  function onResults(results) {
+    if (!running) return;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const landmarks = results.multiFaceLandmarks?.[0];
+    const now = performance.now();
+    if (!landmarks) {
+      currentPose = null;
+      recentFrames.push({ t:now, front:false, face:false });
+      setState('얼굴을 찾는 중', 'away', '카메라에 얼굴이 나타나도록 위치를 조절해 주세요.');
+    } else {
+      currentPose = estimatePose(landmarks);
+      observed += 1;
+      if (currentPose.front) frontObserved += 1;
+      recentFrames.push({t:now,front:currentPose.front,face:true});
+      setState(currentPose.front ? '정면을 바라봅니다' : '고개 방향이 다릅니다',
+        currentPose.front ? 'front' : 'away',
+        `방향 편차 ${Math.round(Math.abs(currentPose.yaw-(baseline?.yaw || 0))*100)} · 기울기 ${Math.round(Math.abs(currentPose.roll-(baseline?.roll || 0)))}°`);
+      drawFace(landmarks,currentPose.front);
+    }
+    recentFrames = recentFrames.filter(f => now - f.t < 1800);
+    const ratio = observed ? Math.round(frontObserved / observed * 100) : 0;
+    $('frontRatio').textContent = observed ? `${ratio}%` : '—';
+    $('meterFill').style.width = `${ratio}%`;
+  }
+
+  async function unlockAudio() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) throw new Error('이 브라우저에서는 오디오 기능을 지원하지 않습니다.');
+    audioCtx ||= new AudioContext();
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    return audioCtx;
+  }
+  function note(frequency, when, duration, volume) {
+    const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(frequency,when);
+    g.gain.setValueAtTime(.0001,when);
+    g.gain.exponentialRampToValueAtTime(volume, when+0.015);
+    g.gain.exponentialRampToValueAtTime(.0001,when+duration);
+    o.connect(g);g.connect(audioCtx.destination);
+    o.start(when);o.stop(when+duration+0.02);
+  }
+  function clockTick() {
+    if (!audioCtx || audioCtx.state!=='running') return false;
+    // A short, dry clock-second tick, synthesized locally with Web Audio.
+    const when=audioCtx.currentTime+.015;
+    const duration=.045;
+    const buffer=audioCtx.createBuffer(1,Math.ceil(audioCtx.sampleRate*duration),audioCtx.sampleRate);
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<data.length;i++) {
+      const t=i/audioCtx.sampleRate;
+      const envelope=Math.exp(-t*110);
+      data[i]=(Math.random()*2-1)*envelope*.55 + Math.sin(2*Math.PI*1650*t)*envelope*.20;
+    }
+    const source=audioCtx.createBufferSource();
+    const gain=audioCtx.createGain();
+    source.buffer=buffer;
+    gain.gain.value=.35;
+    source.connect(gain);gain.connect(audioCtx.destination);
+    source.start(when);
+    return true;
+  }
+
+  function checkFront() {
+    if (!running) return;
+    const now=performance.now();
+    const nearby=recentFrames.filter(f => now-f.t<1300);
+    const faces=nearby.filter(f=>f.face);
+    const front=faces.filter(f=>f.front);
+    // Require recent continuous positive evidence, not merely presence at one instant.
+    if (nearby.length>=3 && faces.length>=3 && faces.length/nearby.length>=.85 && front.length/faces.length>=.75) {
+      if (clockTick()) {
+        bellCount+=1;
+        $('bells').textContent=String(bellCount);
+        notify('⏱️ 정면 상태 확인! 시계 초침 소리를 재생했습니다.');
+      } else {
+        notify('정면이 감지되었지만 소리를 재생하지 못했습니다. ‘소리 테스트’를 눌러 주세요.');
+      }
+    } else {
+      notify('이번 확인에서는 정면 상태가 충분히 유지되지 않아 소리를 재생하지 않았습니다.');
+    }
+  }
+  function restartCheckTimer() {
+    clearInterval(checkTimer);
+    if (!running) return;
+    const ms=Number(intervalSelect.value);
+    nextCheckAt=performance.now()+ms;
+    checkTimer=setInterval(()=>{checkFront();nextCheckAt=performance.now()+ms;},ms);
+  }
+  function updateClock() {
+    if (!running) return;
+    const sec=Math.floor((performance.now()-startedAt)/1000);
+    $('elapsed').textContent=`${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`;
+    $('nextCheck').textContent=`${Math.max(0,Math.ceil((nextCheckAt-performance.now())/1000))}초`;
+  }
+  async function detectLoop(myRun) {
+    if (!running || myRun!==runId) return;
+    const now=performance.now();
+    if (!busy && video.readyState>=2 && now-lastFrameAt>=detectionEveryMs) {
+      lastFrameAt=now;
+      busy=true;
+      try { await faceMesh.send({image:video}); }
+      catch(err) { if (running && myRun===runId) {notify(`얼굴 분석 오류: ${err.message}`);stop();} }
+      finally { busy=false; }
+    }
+    if (running && myRun===runId) frameRequest=requestAnimationFrame(()=>detectLoop(myRun));
+  }
+  async function start() {
+    if (running) return;
+    startBtn.disabled=true;
+    notify('카메라 권한과 얼굴 분석 모델을 준비하고 있습니다…');
+    try {
+      // The user-initiated click unlocks Web Audio on iOS Safari.
+      await unlockAudio();
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('카메라를 사용할 수 없습니다. iPhone에서는 HTTPS로 접속했는지 확인하세요.');
+      mediaStream=await navigator.mediaDevices.getUserMedia({
+        audio:false, video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:15,max:30}}
+      });
+      video.srcObject=mediaStream;
+      await video.play();
+      if (typeof FaceMesh !== 'function') throw new Error('MediaPipe 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+      if (!faceMesh) {
+        faceMesh=new FaceMesh({ locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+        faceMesh.setOptions({maxNumFaces:1,refineLandmarks:false,minDetectionConfidence:0.6,minTrackingConfidence:0.6});
+        faceMesh.onResults(onResults);
+      }
+      baseline=null; recentFrames=[]; observed=0; frontObserved=0; bellCount=0; currentPose=null;
+      $('bells').textContent='0';$('frontRatio').textContent='—';$('meterFill').style.width='0%';
+      $('placeholder').classList.add('hidden');
+      $('livePill').classList.add('on');$('livePill').textContent='전면 카메라 실행 중';
+      startBtn.disabled=true; stopBtn.disabled=false;calibrateBtn.disabled=false;
+      running=true; runId+=1; startedAt=performance.now();
+      setState('얼굴 분석 시작', '', '폰을 고정하고 정면을 향한 후 ‘정면 기준 보정’을 눌러 보세요.');
+      restartCheckTimer();
+      uiTimer=setInterval(updateClock,250);
+      notify('테스트를 시작했습니다. 정면 보정 후 고개를 움직여 보세요.');
+      detectLoop(runId);
+    } catch(err) {
+      notify(`시작 실패: ${err.message}`);
+      stop();
+    }
+  }
+  function stop() {
+    running=false;runId+=1;
+    cancelAnimationFrame(frameRequest);
+    clearInterval(checkTimer);clearInterval(uiTimer);
+    if (mediaStream) mediaStream.getTracks().forEach(track=>track.stop());
+    mediaStream=null;
+    video.pause();video.srcObject=null;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    $('placeholder').classList.remove('hidden');
+    $('livePill').classList.remove('on');$('livePill').textContent='카메라 꺼짐';
+    startBtn.disabled=false;stopBtn.disabled=true;calibrateBtn.disabled=true;
+    $('nextCheck').textContent='—';currentPose=null;recentFrames=[];
+    setState('측정 중지', '', '카메라가 종료되었습니다.');
+  }
+  startBtn.addEventListener('click',start);
+  stopBtn.addEventListener('click',()=>{ stop();notify('테스트를 중지하고 카메라를 종료했습니다.'); });
+  calibrateBtn.addEventListener('click',()=>{
+    if (!running || !currentPose) {notify('먼저 카메라에 얼굴이 보이도록 해 주세요.');return;}
+    baseline={yaw:currentPose.yaw,roll:currentPose.roll,pitch:currentPose.pitch};
+    recentFrames=[];
+    notify('◎ 현재 고개 방향을 정면 기준으로 보정했습니다. 약 1초 뒤부터 다시 판정합니다.');
+  });
+  $('soundBtn').addEventListener('click',async()=>{
+    try { await unlockAudio();clockTick();notify('⏱️ 시계 초침 소리 테스트를 재생했습니다. 아이폰 소리 설정도 확인해 주세요.'); }
+    catch(err) {notify(`소리 재생 실패: ${err.message}`);}
+  });
+  intervalSelect.addEventListener('change',()=>{restartCheckTimer(); if(running) notify('정면 확인 간격을 변경했습니다.');});
+  document.addEventListener('visibilitychange',()=>{
+    if (document.hidden && running) {
+      stop(); notify('Safari가 백그라운드로 이동해 개인정보 보호를 위해 카메라를 중지했습니다. 다시 시작해 주세요.');
+    }
+  });
+  window.addEventListener('pagehide',()=>{if(running)stop();});
+})();
+</script>
+</body>
+</html>
