@@ -66,7 +66,7 @@
     .chart-header h2 { margin:0; }
     .chart-total { color:var(--mint); font-size:14px; font-weight:800; }
     .chart-scroll { width:100%; min-width:0; margin-top:14px; }
-    #hourlyChart { display:block; width:100%; min-width:0; height:auto; }
+    #hourlyChart, #recentChart { display:block; width:100%; min-width:0; height:auto; }
     h2 { font-size:16px; margin:0 0 10px; }
     ol { margin:0; padding-left:23px; color:#c4d0df; font-size:13px; line-height:1.9; }
     .note { color:var(--sub); font-size:12px; line-height:1.7; margin-top:12px; }
@@ -99,7 +99,7 @@
           <div><div class="face-icon">◉</div><strong>카메라 대기 중</strong><p>페이지를 열면 자동으로 카메라를 시작합니다.<br>셀카 카메라 사용을 허용하세요.</p></div>
         </div>
         <div class="live-pill" id="livePill">카메라 꺼짐</div>
-        <div class="score-pill" aria-label="정면 감지 점수">점수<strong id="score">0</strong></div>
+        <div class="score-pill" aria-label="확인 동작 횟수">체크수<strong id="checkCount">0</strong></div>
         <button id="calibrateBtn" class="calibrate" disabled>◎ 정면 기준 추가</button>
         <button id="audioEnableBtn" class="audio-enable">♪ 소리 켜기</button>
       </div>
@@ -113,6 +113,17 @@
         <div class="hint" id="blurStatus" role="status" style="margin-top:8px">배경 흐림 Off</div>
       </div>
     </section>
+
+  <section class="panel section" aria-label="최근 2시간의 점수">
+    <div class="chart-header">
+      <h2>최근 2시간 · 15분별 점수</h2>
+      <div class="chart-total" id="recentTotal">구간 합계 0점</div>
+    </div>
+    <p class="hint" id="recentRange"></p>
+    <div class="chart-scroll"><svg id="recentChart" viewBox="0 0 480 230" role="img" aria-label="최근 2시간 15분 단위 점수 막대 차트"></svg></div>
+    <p class="hint">현재 진행 중인 15분 구간을 포함한 최근 8개 구간입니다. 정면 확인 성공 시 확인 간격의 초만큼 점수를 더합니다. 예: 5초마다 확인하면 성공당 5점.</p>
+    <p class="hint" id="recentHistoryNote"></p>
+  </section>
 
   <section class="panel section" aria-label="오늘의 시간대별 점수">
     <div class="chart-header">
@@ -197,18 +208,6 @@
     </section>
   </div>
 
-  <section class="panel section">
-    <h2>사용 방법</h2>
-    <ol>
-      <li>아이폰 Safari에서 <span class="tag">HTTPS 주소</span>로 접속합니다. (맥에서는 <span class="tag">localhost</span>도 가능)</li>
-      <li>페이지를 열면 카메라 시작을 자동으로 시도합니다. 전면 카메라 권한을 허용하세요. 자동 시작이 제한되면 <strong>카메라 시작</strong>을 누르세요.</li>
-      <li>정면이 유지되면 소리 재생 여부와 관계없이 점수가 올라갑니다. 소리 자동 재생이 제한되면 카메라 우측 하단의 <strong>소리 켜기</strong>를 한 번 누르세요.</li>
-      <li>폰을 책상에 세워 놓고, 작업할 때의 자세에서 <strong>정면 기준 추가</strong>를 누릅니다. 다른 작업 자세도 같은 버튼으로 추가할 수 있습니다.</li>
-      <li>원하는 사운드를 선택하고, 얼굴을 좌우로 돌렸다가 등록한 자세로 돌아오며 소리를 확인합니다.</li>
-      <li>측정을 마치면 <strong>정지</strong>를 눌러 카메라를 종료합니다.</li>
-    </ol>
-    <p class="note">브라우저 보안 정책으로 <strong>파일 앱에서 HTML을 직접 여는 방식(file://)</strong>은 카메라가 작동하지 않을 수 있습니다. HTTPS 웹사이트로 배포해 사용하세요. 화면이 잠기거나 Safari가 백그라운드로 이동하면 카메라 분석이 중지될 수 있습니다. 영상은 기기에서 처리하며 서버로 업로드하지 않습니다. 단, 얼굴 인식 라이브러리는 처음 실행 시 CDN에서 내려받습니다.</p>
-  </section>
 </main>
 <script>
 (() => {
@@ -244,8 +243,9 @@
   let startedAt = 0;
   let nextCheckAt = 0;
   let bellCount = 0;
-  let pageScore = 0;
-  const hourlyStorageKey = 'focus-camera-test.hourly-scores.v2';
+  let checkCount = 0;
+  const hourlyStorageKey = 'focus-camera-test.hourly-scores.v3';
+  const previousHourlyStorageKey = 'focus-camera-test.hourly-scores.v2';
   const legacyHourlyStorageKey = 'focus-camera-test.hourly-scores.v1';
   let hourlyRecords = [];
   let hourlyScores = {date:'', hours:Array(24).fill(0)};
@@ -388,19 +388,28 @@
       const raw=window.localStorage.getItem(hourlyStorageKey);
       if (raw) {
         const saved=JSON.parse(raw);
-        if (!saved || saved.version!==2 || !Array.isArray(saved.records) || !saved.records.every(row=>row &&
+        if (!saved || saved.version!==3 || !Array.isArray(saved.records) || !saved.records.every(row=>row &&
             /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isInteger(row.hour) && row.hour>=0 && row.hour<24 &&
+            (row.minute===null || [0,15,30,45].includes(row.minute)) &&
             Number.isSafeInteger(row.score) && row.score>=0)) throw new Error('Invalid hourly records');
-        hourlyRecords=saved.records.map(({date,hour,score})=>({date,hour,score}));
+        hourlyRecords=saved.records.map(({date,hour,minute,score})=>({date,hour,minute,score}));
       } else {
+        const previousRaw=window.localStorage.getItem(previousHourlyStorageKey);
         const legacyRaw=window.localStorage.getItem(legacyHourlyStorageKey);
-        if (legacyRaw) {
+        if (previousRaw) {
+          const previous=JSON.parse(previousRaw);
+          if (!previous || previous.version!==2 || !Array.isArray(previous.records) || !previous.records.every(row=>row &&
+              /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isInteger(row.hour) && row.hour>=0 && row.hour<24 &&
+              Number.isSafeInteger(row.score) && row.score>=0)) throw new Error('Invalid previous records');
+          hourlyRecords=previous.records.map(({date,hour,score})=>({date,hour,minute:null,score}));
+          window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:3,records:hourlyRecords}));
+        } else if (legacyRaw) {
           const legacy=JSON.parse(legacyRaw);
           if (!legacy || legacy.version!==1 || !/^\d{4}-\d{2}-\d{2}$/.test(legacy.date) ||
               !Array.isArray(legacy.hours) || legacy.hours.length!==24 ||
               !legacy.hours.every(value=>Number.isSafeInteger(value) && value>=0)) throw new Error('Invalid legacy scores');
-          hourlyRecords=legacy.hours.map((score,hour)=>({date:legacy.date,hour,score}));
-          window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:2,records:hourlyRecords}));
+          hourlyRecords=legacy.hours.map((score,hour)=>({date:legacy.date,hour,minute:null,score}));
+          window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:3,records:hourlyRecords}));
         }
       }
     } catch (err) {
@@ -437,16 +446,47 @@
     $('hourlyChart').setAttribute('aria-label',`오늘 시간대별 누적 점수. 합계 ${total}점. `+hours.map((value,hour)=>`${hour}시 ${value}점`).join(', '));
   }
 
-  function recordHourlyPoint() {
+  function renderRecentChart(now=new Date()) {
+    const latest=new Date(now.getTime());
+    latest.setMinutes(Math.floor(latest.getMinutes()/15)*15,0,0);
+    const slots=Array.from({length:8},(_,i)=>new Date(latest.getTime()-(7-i)*15*60000));
+    const labels=slots.map(t=>`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`);
+    const values=slots.map(t=>hourlyRecords.filter(row=>row.date===localDateKey(t) && row.hour===t.getHours() && row.minute===t.getMinutes()).reduce((sum,row)=>sum+row.score,0));
+    const end=new Date(latest.getTime()+15*60000);
+    $('recentRange').textContent=`${localDateKey(slots[0])} ${labels[0]} – ${localDateKey(end)} ${String(end.getHours()).padStart(2,'0')}:${String(end.getMinutes()).padStart(2,'0')} · 마지막 구간 집계 중`;
+    $('recentTotal').textContent=`구간 합계 ${values.reduce((sum,value)=>sum+value,0)}점`;
+    $('recentHistoryNote').textContent=hourlyRecords.some(row=>row.minute===null && row.score>0) ?
+      '이전 시간별 기록은 24시간 차트에 보존됩니다. 15분 차트는 이 기능 적용 후 기록부터 표시합니다.' : '';
+    const width=Math.max(180,$('recentChart').parentElement.clientWidth || 480);
+    $('recentChart').setAttribute('viewBox',`0 0 ${width} 230`);
+    const left=42,right=10,top=28,bottom=188,height=bottom-top,slot=(width-left-right)/8;
+    const maximum=Math.max(4,Math.ceil(Math.max(...values)/4)*4);
+    let svg='';
+    for(let tick=0;tick<=4;tick++) {
+      const value=maximum*tick/4,y=bottom-height*tick/4;
+      svg+=`<line x1="${left}" y1="${y}" x2="${width-right}" y2="${y}" stroke="#27354c"/><text x="${left-8}" y="${y+4}" text-anchor="end" fill="#a3b1c9" font-size="10">${value}</text>`;
+    }
+    values.forEach((value,i)=>{
+      const barHeight=value/maximum*height,center=left+(i+.5)*slot,barWidth=slot*.65;
+      svg+=`<g><title>${localDateKey(slots[i])} ${labels[i]}: ${value}점</title><rect x="${center-barWidth/2}" y="${bottom-barHeight}" width="${barWidth}" height="${barHeight}" rx="2" fill="#3ac7e2"/>`;
+      if(value && slot>=30) svg+=`<text x="${center}" y="${bottom-barHeight-6}" text-anchor="middle" fill="#edf4ff" font-size="10">${value}</text>`;
+      if(width>=400 || i%2===0 || i===7) svg+=`<text x="${center}" y="${bottom+20}" text-anchor="middle" fill="#a3b1c9" font-size="9">${labels[i]}</text>`;
+      svg+='</g>';
+    });
+    $('recentChart').innerHTML=svg;
+    $('recentChart').setAttribute('aria-label','최근 2시간 15분별 점수. '+values.map((value,i)=>`${labels[i]} ${value}점`).join(', '));
+  }
+
+  function recordHourlyPoint(points) {
     const now=new Date();
     restoreHourlyScores(now);
-    const date=localDateKey(now), hour=now.getHours();
-    const record=hourlyRecords.find(row=>row.date===date && row.hour===hour);
-    if (record) record.score+=1;
-    else hourlyRecords.push({date,hour,score:1});
-    hourlyScores.hours[hour]+=1;
+    const date=localDateKey(now), hour=now.getHours(), minute=Math.floor(now.getMinutes()/15)*15;
+    const record=hourlyRecords.find(row=>row.date===date && row.hour===hour && row.minute===minute);
+    if (record) record.score+=points;
+    else hourlyRecords.push({date,hour,minute,score:points});
+    hourlyScores.hours[hour]+=points;
     try {
-      window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:2,records:hourlyRecords}));
+      window.localStorage.setItem(hourlyStorageKey,JSON.stringify({version:3,records:hourlyRecords}));
       hourlyStorageDirty=false;
       $('chartStorageStatus').textContent=`${date} ${String(hour).padStart(2,'0')}시 기록 저장 · 이전 날짜 기록도 보존합니다.`;
     } catch (err) {
@@ -454,11 +494,13 @@
       $('chartStorageStatus').textContent='기록 저장에 실패했습니다. 이번 접속에서만 기록이 유지됩니다.';
     }
     renderHourlyChart();
+    renderRecentChart(now);
   }
 
   function refreshHourlyChart() {
     restoreHourlyScores();
     renderHourlyChart();
+    renderRecentChart();
   }
 
   function clearPersonOverlay() {
@@ -694,27 +736,27 @@
     } catch(err) {notify(`소리 재생 실패: ${err.message}`);}
   }
 
-  function checkFront() {
+  function checkFront(intervalSeconds=Number(intervalSelect.value)/1000) {
     if (!running) return;
+    checkCount+=1;
+    $('checkCount').textContent=String(checkCount);
     const now=performance.now();
     const nearby=recentFrames.filter(f => now-f.t<1300);
     const faces=nearby.filter(f=>f.face);
     const front=faces.filter(f=>f.front);
     // Require recent continuous positive evidence, not merely presence at one instant.
     if (nearby.length>=3 && faces.length>=3 && faces.length/nearby.length>=.85 && front.length/faces.length>=.75) {
-      pageScore+=1;
-      $('score').textContent=String(pageScore);
-      recordHourlyPoint();
+      recordHourlyPoint(intervalSeconds);
       let played=false;
       try { played=playSelectedSound(); } catch(err) { updateAudioStatus(); }
       if (played) {
         bellCount+=1;
         $('bells').textContent=String(bellCount);
-        notify(`정면 확인 +1점! ${selectedSoundLabel()} 소리를 재생했습니다.`);
+        notify(`정면 확인 +${intervalSeconds}점! ${selectedSoundLabel()} 소리를 재생했습니다.`);
       } else {
         updateAudioStatus();
-        notify($('soundPreset').value==='silent' || Number($('soundVolume').value)===0 ? '정면 확인 +1점 · 소리 없이 점수를 누적합니다.' :
-          '정면 확인 +1점 · 소리를 켜려면 카메라 화면의 ‘소리 켜기’를 눌러 주세요.');
+        notify($('soundPreset').value==='silent' || Number($('soundVolume').value)===0 ? `정면 확인 +${intervalSeconds}점 · 소리 없이 점수를 누적합니다.` :
+          `정면 확인 +${intervalSeconds}점 · 소리를 켜려면 카메라 화면의 ‘소리 켜기’를 눌러 주세요.`);
       }
     } else {
       notify('이번 확인에서는 정면 상태가 충분히 유지되지 않아 소리를 재생하지 않았습니다.');
@@ -725,7 +767,7 @@
     if (!running) return;
     const ms=Number(intervalSelect.value);
     nextCheckAt=performance.now()+ms;
-    checkTimer=setInterval(()=>{checkFront();nextCheckAt=performance.now()+ms;},ms);
+    checkTimer=setInterval(()=>{checkFront(ms/1000);nextCheckAt=performance.now()+ms;},ms);
   }
   function updateClock() {
     if (!running) return;
@@ -856,7 +898,10 @@
   updateSoundSelection();
   $('volumeLabel').textContent=`${$('soundVolume').value}%`;
   refreshHourlyChart();
-  if (typeof ResizeObserver==='function') new ResizeObserver(renderHourlyChart).observe($('hourlyChart').parentElement);
+  if (typeof ResizeObserver==='function') {
+    new ResizeObserver(renderHourlyChart).observe($('hourlyChart').parentElement);
+    new ResizeObserver(()=>renderRecentChart()).observe($('recentChart').parentElement);
+  }
   setInterval(refreshHourlyChart,30000);
   window.addEventListener('storage',event=>{if(event.key===hourlyStorageKey || event.key===null) refreshHourlyChart();});
   start({automatic:true});
