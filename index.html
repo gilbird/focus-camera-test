@@ -203,21 +203,21 @@
         <label class="label" for="soundPreset">정면 감지 사운드</label>
         <select id="soundPreset">
           <option value="silent">무음 · 소리 없이 점수 누적</option>
-          <option value="tick" selected>시계 초침 · 짧고 가벼운 틱</option>
+          <option value="tick">시계 초침 · 짧고 가벼운 틱</option>
           <option value="rain">빗소리 · 가볍게 쏟아지는 비</option>
           <option value="waves">파도 · 부드럽게 밀려오는 물결</option>
           <option value="wind">바람 · 낮고 포근한 바람결</option>
           <option value="chime">차임 · 맑고 부드러운 세 음</option>
-          <option value="pad">화음 · 따뜻하게 번지는 여운</option>
+          <option value="pad" selected>화음 · 따뜻하게 번지는 여운</option>
         </select>
         <div class="sound-grid" aria-label="사운드 선택 및 미리듣기">
           <button class="secondary" data-sound="silent" aria-pressed="false">무음 선택</button>
-          <button class="secondary" data-sound="tick" aria-pressed="true">시계 초침 듣기</button>
+          <button class="secondary" data-sound="tick" aria-pressed="false">시계 초침 듣기</button>
           <button class="secondary" data-sound="rain" aria-pressed="false">빗소리 듣기</button>
           <button class="secondary" data-sound="waves" aria-pressed="false">파도 듣기</button>
           <button class="secondary" data-sound="wind" aria-pressed="false">바람 듣기</button>
           <button class="secondary" data-sound="chime" aria-pressed="false">차임 듣기</button>
-          <button class="secondary" data-sound="pad" aria-pressed="false">화음 듣기</button>
+          <button class="secondary" data-sound="pad" aria-pressed="true">화음 듣기</button>
         </div>
         <p class="hint">버튼을 누르면 소리를 선택하고 바로 미리듣습니다. 카메라 없이도 비교할 수 있습니다. 초침 외 소리는 약 1.4초간 재생하며, 정면 감지 때도 선택한 소리가 납니다.</p>
         <label class="label" for="failureSoundPreset">몰입 실패 알림음</label>
