@@ -179,7 +179,7 @@
       </div>
       <p class="hint" id="calibrationSummary" role="status">등록된 정면 기준: 0개 · 기본 기준 사용 중</p>
       <p class="hint">작업할 때의 자세마다 ‘정면 기준 추가’를 눌러 주세요. 등록한 기준 중 하나와 일치하면 정면으로 판정합니다. 기준은 이 기기·브라우저에 저장하여 새로고침하거나 다시 접속해도 재사용합니다. ‘기준 초기화’를 누르면 저장된 기준도 삭제합니다. 카메라 위치를 바꾸면 초기화 후 다시 등록하세요.</p>
-      <p class="hint" id="settingsSummary" role="status">소리·음량·확인 간격·배경 흐림·화면 번쩍임은 이 브라우저에 자동 저장됩니다.</p>
+      <p class="hint" id="settingsSummary" role="status">성공·실패 소리·음량·확인 간격·배경 흐림·화면 번쩍임은 이 브라우저에 자동 저장됩니다.</p>
       <div>
         <label class="label" for="interval">정면 확인 간격</label>
         <select id="interval">
@@ -215,6 +215,15 @@
           <button class="secondary" data-sound="pad" aria-pressed="false">화음 듣기</button>
         </div>
         <p class="hint">버튼을 누르면 소리를 선택하고 바로 미리듣습니다. 카메라 없이도 비교할 수 있습니다. 초침 외 소리는 약 1.4초간 재생하며, 정면 감지 때도 선택한 소리가 납니다.</p>
+        <label class="label" for="failureSoundPreset">몰입 실패 알림음</label>
+        <select id="failureSoundPreset">
+          <option value="descend" selected>하강음 · 짧게 내려가는 두 음</option>
+          <option value="double">두 번 알림 · 낮은 톡톡</option>
+          <option value="low">낮은 알림 · 묵직한 한 음</option>
+          <option value="silent">무음 · 실패 소리 끄기</option>
+        </select>
+        <div class="btns" style="margin-top:8px"><button id="failureSoundBtn" class="secondary">실패 알림음 미리듣기</button></div>
+        <p class="hint">성공 소리와 실패 소리는 각각 선택하며, 음량은 공통으로 적용됩니다.</p>
         <label class="label" for="soundVolume">소리 크기 <output id="volumeLabel" for="soundVolume">40%</output></label>
         <input id="soundVolume" type="range" min="0" max="100" value="40" step="5">
         <div class="btns">
@@ -395,9 +404,10 @@
         $('soundVolume').value = String(saved.soundVolume);
       }
       if ([2000,3000,5000,10000].includes(saved.interval)) intervalSelect.value = String(saved.interval);
+      if (['descend','double','low','silent'].includes(saved.failureSoundPreset)) $('failureSoundPreset').value=saved.failureSoundPreset;
       if (typeof saved.backgroundBlur==='boolean') $('backgroundBlur').checked=saved.backgroundBlur;
       if (typeof saved.flashOnCheck==='boolean') $('flashOnCheck').checked=saved.flashOnCheck;
-      $('settingsSummary').textContent = '저장된 소리·음량·확인 간격·배경 흐림·화면 번쩍임을 복원했습니다.';
+      $('settingsSummary').textContent = '저장된 성공·실패 소리·음량·확인 간격·배경 흐림·화면 번쩍임을 복원했습니다.';
     } catch (err) {
       $('settingsSummary').textContent = '저장 설정을 불러오지 못해 기본 설정을 사용합니다.';
     }
@@ -406,9 +416,9 @@
   function persistSettings() {
     try {
       window.localStorage.setItem(settingsStorageKey, JSON.stringify({version:1,
-        soundPreset:$('soundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value),
+        soundPreset:$('soundPreset').value, failureSoundPreset:$('failureSoundPreset').value, soundVolume:Number($('soundVolume').value), interval:Number(intervalSelect.value),
         backgroundBlur:$('backgroundBlur').checked, flashOnCheck:$('flashOnCheck').checked}));
-      $('settingsSummary').textContent = '소리·음량·확인 간격·배경 흐림·화면 번쩍임을 저장했습니다. 다음 접속에도 적용됩니다.';
+      $('settingsSummary').textContent = '성공·실패 소리·음량·확인 간격·배경 흐림·화면 번쩍임을 저장했습니다. 다음 접속에도 적용됩니다.';
     } catch (err) {
       $('settingsSummary').textContent = '설정 저장에 실패했습니다. 이번 접속에서만 적용됩니다.';
     }
@@ -668,8 +678,11 @@
     audioBus.gain.value = Number($('soundVolume').value) / 100;
     return audioCtx;
   }
+  function hasAudibleSelection() {
+    return Number($('soundVolume').value)>0 && ($('soundPreset').value!=='silent' || $('failureSoundPreset').value!=='silent');
+  }
   function updateAudioStatus() {
-    $('audioEnableBtn').hidden=$('soundPreset').value==='silent' || Number($('soundVolume').value)===0 || audioCtx?.state==='running';
+    $('audioEnableBtn').hidden=!hasAudibleSelection() || audioCtx?.state==='running';
   }
   async function unlockAudio() {
     prepareAudio();
@@ -678,7 +691,7 @@
     return audioCtx;
   }
   function attemptAudioStart() {
-    if ($('soundPreset').value==='silent' || Number($('soundVolume').value)===0) { updateAudioStatus(); return; }
+    if (!hasAudibleSelection()) { updateAudioStatus(); return; }
     // Do not await this from camera startup: Safari may keep resume pending until a real touch.
     try { unlockAudio().catch(()=>updateAudioStatus()); }
     catch (err) { updateAudioStatus(); }
@@ -767,6 +780,26 @@
     }
     return true;
   }
+  function playFailureSound() {
+    const preset=$('failureSoundPreset').value;
+    if (preset==='silent') {stopSounds();return false;}
+    if (!audioCtx || audioCtx.state!=='running' || !audioBus || Number($('soundVolume').value)===0) return false;
+    stopSounds();
+    const when=audioCtx.currentTime+.015;
+    if (preset==='descend') {note(392,when,.18,.16);note(261.63,when+.16,.30,.16);}
+    else if (preset==='double') {note(220,when,.12,.20);note(220,when+.22,.12,.20);}
+    else {note(146.83,when,.45,.22,.03);}
+    return true;
+  }
+  async function previewFailureSound() {
+    if ($('failureSoundPreset').value==='silent') {stopSounds();notify('실패 알림음은 무음입니다.');return;}
+    try {
+      await unlockAudio();
+      const played=playFailureSound();
+      notify(played ? '선택한 실패 알림음을 미리 재생했습니다.' : '소리가 활성화되지 않았거나 음량이 0%입니다.');
+    } catch(err) {notify(`실패 알림음 재생 실패: ${err.message}`);}
+  }
+
   function updateSoundSelection() {
     document.querySelectorAll('[data-sound]').forEach(button =>
       button.setAttribute('aria-pressed',String(button.dataset.sound===$('soundPreset').value)));
@@ -775,7 +808,7 @@
   async function previewSound() {
     if ($('soundPreset').value==='silent') {
       stopSounds();
-      notify('무음 모드입니다. 정면 감지 점수와 시간대별 기록은 계속 누적됩니다.');
+      notify('성공 알림음은 무음입니다. 몰입 판정과 점수는 계속 누적되며, 실패 알림음은 별도 설정을 따릅니다.');
       return;
     }
     try {
@@ -787,9 +820,10 @@
   }
 
   let checkFlashAnimation = null;
-  function flashCheck() {
+  function flashCheck(success) {
     if (!$('flashOnCheck').checked) return;
     checkFlashAnimation?.cancel();
+    $('checkFlash').style.background=success ? '#ffffff' : '#ff3b50';
     checkFlashAnimation=$('checkFlash').animate([{opacity:0},{opacity:.28,offset:.15},{opacity:0}],{duration:180,easing:'ease-out'});
   }
 
@@ -804,9 +838,9 @@
     if (!running) return;
     checkCount+=1;
     $('checkCount').textContent=String(checkCount);
-    flashCheck();
     const now=performance.now();
     const heldFront=heldFrontForCheck(now);
+    flashCheck(heldFront);
     checkWindowStartedAt=now;
     recentFrames=[];
     if (heldFront) {
@@ -825,7 +859,13 @@
           `정면 확인 +${intervalSeconds}점 · 소리를 켜려면 카메라 화면의 ‘소리 켜기’를 눌러 주세요.`);
       }
     } else {
-      notify('이번 확인 간격 전체에서 정면 유지가 확인되지 않아 몰입 판정과 점수를 추가하지 않았습니다.');
+      let played=false;
+      try {played=playFailureSound();} catch(err) {updateAudioStatus();}
+      if (played) {bellCount+=1;$('bells').textContent=String(bellCount);}
+      else updateAudioStatus();
+      const feedback=played ? '실패 알림음을 재생했습니다.' :
+        ($('failureSoundPreset').value==='silent' || Number($('soundVolume').value)===0 ? '실패 알림음은 무음입니다.' : '소리를 켜려면 ‘소리 켜기’를 눌러 주세요.');
+      notify('확인 간격 동안 정면 유지가 확인되지 않아 몰입수와 점수를 추가하지 않았습니다. '+feedback);
     }
   }
   function restartCheckTimer() {
@@ -936,7 +976,9 @@
       '이번 접속의 기준은 초기화했지만 저장된 기준 삭제에 실패했습니다. 다음 접속에서 이전 기준이 복원될 수 있습니다.');
   });
   $('soundBtn').addEventListener('click',previewSound);
-  $('audioEnableBtn').addEventListener('click',previewSound);
+  $('audioEnableBtn').addEventListener('click',()=>$('soundPreset').value==='silent' ? previewFailureSound() : previewSound());
+  $('failureSoundBtn').addEventListener('click',previewFailureSound);
+  $('failureSoundPreset').addEventListener('change',()=>{stopSounds();persistSettings();updateAudioStatus();previewFailureSound();});
   $('soundStopBtn').addEventListener('click',()=>{stopSounds();notify('재생 중인 소리를 멈췄습니다. 정면 감지 알림은 계속 활성화되어 있습니다.');});
   $('soundPreset').addEventListener('change',()=>{stopSounds();updateSoundSelection();persistSettings();notify(`${selectedSoundLabel()}을 정면 감지 사운드로 선택했습니다.`);});
   document.querySelectorAll('[data-sound]').forEach(button=>button.addEventListener('click',()=>{
